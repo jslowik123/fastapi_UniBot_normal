@@ -1,7 +1,3 @@
-from pinecon_con import PineconeCon
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.messages import HumanMessage, AIMessage
-from chatbot import get_bot
 import uvicorn
 from fastapi import FastAPI
 app = FastAPI()
