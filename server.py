@@ -99,3 +99,10 @@ async def send_message(user_input: str):
         "status": "success",
         "response": response,
     }
+@app.get("/")
+def read_root():
+    return {"message": "Hello, FastAPI!"}
+    
+@app.get("/test")
+def read_root():
+    return {"message": "Hello, test"}

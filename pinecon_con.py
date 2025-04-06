@@ -122,5 +122,3 @@ def delete_all():
     # Alle Vektoren löschen
     index.delete(namespace="ns1", delete_all=True)
 
-
-
