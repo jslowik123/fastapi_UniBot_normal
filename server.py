@@ -4,6 +4,7 @@ from sentence_transformers import SentenceTransformer
 import PyPDF2
 from dotenv import load_dotenv
 import os
+import uvicorn
 from pinecon_con import PineconeCon
 from chatbot import get_bot, message_bot
 load_dotenv()
@@ -106,3 +107,7 @@ def read_root():
 @app.get("/test")
 def read_root():
     return {"message": "Hello, test"}
+
+if __name__ == "__main__":
+    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    

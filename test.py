@@ -11,6 +11,9 @@ def send_pdf_post(url, pdf_path):
             print(f"Fehler {response.status_code}: {response.text}")
 
 if __name__ == "__main__":
-    test_url = "http://localhost:8000/upload"
+    test_url = "http://localhost:8000"
     test_pdf = "Innovative Ideas Seminar - Expose - Jasper Slowik Kopie 2.pdf"
-    send_pdf_post(test_url, test_pdf)
+    print(test_url+"/start_bot")
+    response = requests.post(test_url+"/start_bot")
+    
+    print(response.json())
