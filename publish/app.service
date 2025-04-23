@@ -1,0 +1,15 @@
+[Unit]
+Description=FastAPI Application
+After=network.target
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/app
+EnvironmentFile=/opt/app/.env.production
+ExecStart=/usr/local/bin/docker-compose up
+ExecStop=/usr/local/bin/docker-compose down
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target 

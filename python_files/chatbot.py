@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
 from dotenv import load_dotenv
-from pinecon_con import PineconeCon
+from python_files.pinecon_con import PineconeCon
 
 
 def get_bot():
@@ -52,3 +52,4 @@ def message_bot(user_input, context, chat_history):
     chat_history.append(HumanMessage(content=user_input))
     chat_history.append(AIMessage(content=response.content))
     print("AI:" + response.content)
+
