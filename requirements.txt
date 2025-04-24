@@ -3,8 +3,8 @@ uvicorn==0.24.0
 pinecone-client==3.2.2
 PyPDF2==3.0.1
 python-dotenv==1.0.0
-langchain-openai==0.0.2
-langchain-core>=0.1.7,<0.2
-numpy==1.26.0
-transformers==4.30.2
 python-multipart==0.0.20
+pydantic>=2.9.0,<3.0.0
+langchain-openai>=0.3.0
+langchain-core>=0.3.47,<1.0.0
+typing-extensions>=4.12.0
