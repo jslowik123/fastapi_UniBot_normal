@@ -65,6 +65,17 @@ class DeleteAllResponse(BaseModel):
     status: str
     message: str
 
+@app.get("/")
+async def root():
+    """
+    Root endpoint that returns a welcome message.
+    """
+    return {
+        "message": "Welcome to the Uni Chatbot API",
+        "status": "online",
+        "version": "1.0.0"
+    }
+
 @app.post("/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile, namespace: str = Form(...)):
     """
