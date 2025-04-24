@@ -65,6 +65,27 @@ class DeleteAllResponse(BaseModel):
     status: str
     message: str
 
+# Request Models
+class UploadRequest(BaseModel):
+    namespace: str
+
+class DeleteRequest(BaseModel):
+    file_name: str
+    namespace: str
+
+class QueryRequest(BaseModel):
+    query: str
+
+class MessageRequest(BaseModel):
+    user_input: str
+
+class NamespaceRequest(BaseModel):
+    namespace: str
+    dimension: int = 1024
+
+class DeleteAllRequest(BaseModel):
+    namespace: str = "ns1"
+
 @app.get("/")
 async def root():
     """
@@ -77,13 +98,13 @@ async def root():
     }
 
 @app.post("/upload", response_model=UploadResponse)
-async def upload_file(file: UploadFile, namespace: str = Form(...)):
+async def upload_file(file: UploadFile, request: UploadRequest):
     """
     Upload a PDF file and process its content into Pinecone.
     
     Args:
         file: The PDF file to upload
-        namespace: The Pinecone namespace to store the embeddings
+        request: UploadRequest containing the namespace
         
     Returns:
         UploadResponse with status and file information
@@ -97,7 +118,7 @@ async def upload_file(file: UploadFile, namespace: str = Form(...)):
         }]
 
         embedding = con.create_embeddings(data)
-        con.upload_embeddings(data, embedding, namespace)
+        con.upload_embeddings(data, embedding, request.namespace)
 
         return UploadResponse(
             status="success",
@@ -112,33 +133,32 @@ async def upload_file(file: UploadFile, namespace: str = Form(...)):
         )
 
 @app.post("/delete")
-async def delete_file(file_name: str, namespace: str):
+async def delete_file(request: DeleteRequest):
     """
     Delete a file's embeddings from Pinecone.
     
     Args:
-        file_name: Name of the file to delete
-        namespace: The Pinecone namespace containing the embeddings
+        request: DeleteRequest containing file_name and namespace
     """
-    con.delete_embeddings(file_name, namespace)
+    con.delete_embeddings(request.file_name, request.namespace)
     return {
         "status": "success",
-        "message": f"File {file_name} deleted successfully",
-        "filename": file_name
+        "message": f"File {request.file_name} deleted successfully",
+        "filename": request.file_name
     }
 
-@app.get("/query", response_model=QueryResponse)
-async def search_query(query: str):
+@app.post("/query", response_model=QueryResponse)
+async def search_query(request: QueryRequest):
     """
     Search the Pinecone index for relevant content.
     
     Args:
-        query: The search query string
+        request: QueryRequest containing the search query
         
     Returns:
         QueryResponse with matching results
     """
-    results = con.query(query)
+    results = con.query(request.query)
     
     return QueryResponse(
         status="success",
@@ -162,12 +182,12 @@ async def start_bot():
     return {"status": "success", "message": "Bot started successfully"}
 
 @app.post("/send_message", response_model=MessageResponse)
-async def send_message(user_input: str):
+async def send_message(request: MessageRequest):
     """
     Send a message to the chatbot and get a response.
     
     Args:
-        user_input: The user's message
+        request: MessageRequest containing the user's message
         
     Returns:
         MessageResponse with the bot's response or error message
@@ -179,14 +199,14 @@ async def send_message(user_input: str):
         )
     
     # Get context from Pinecone
-    results = con.query(user_input)
+    results = con.query(request.user_input)
     context = "\n".join([match["text"] for match in results])
     
     # Get bot response
-    response = message_bot(user_input, context, chat_state.chat_history)
+    response = message_bot(request.user_input, context, chat_state.chat_history)
     
     # Update chat history
-    chat_state.chat_history.append({"role": "user", "content": user_input})
+    chat_state.chat_history.append({"role": "user", "content": request.user_input})
     chat_state.chat_history.append({"role": "assistant", "content": response})
     
     return MessageResponse(
@@ -195,41 +215,37 @@ async def send_message(user_input: str):
     )
 
 @app.post("/create_namespace", response_model=NamespaceResponse)
-async def create_namespace(namespace: str, dimension: int = 1024):
+async def create_namespace(request: NamespaceRequest):
     """
     Create a new namespace in Pinecone with a dummy vector.
     
     Args:
-        namespace: Name of the namespace to create (must be non-empty)
-        dimension: Dimension of the vector (default: 1536)
+        request: NamespaceRequest containing namespace and dimension
         
     Returns:
         NamespaceResponse with creation status and details
     """
-    result = con.create_namespace_with_dummy(namespace, dimension)
+    result = con.create_namespace_with_dummy(request.namespace, request.dimension)
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
     return NamespaceResponse(**result)
 
-
 @app.post("/delete_all", response_model=DeleteAllResponse)
-async def delete_all_vectors(namespace: str = "ns1"):
+async def delete_all_vectors(request: DeleteAllRequest):
     """
     Delete all vectors from a namespace.
     
     Args:
-        namespace: The namespace to clear (default: "ns1")
+        request: DeleteAllRequest containing the namespace
         
     Returns:
         DeleteAllResponse with operation status
     """
-    result = con.delete_all(namespace)
+    result = con.delete_all(request.namespace)
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
     return DeleteAllResponse(**result)
 
-
-    
 @app.get("/test")
 def read_root():
     """
