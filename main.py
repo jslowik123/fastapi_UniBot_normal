@@ -216,12 +216,7 @@ async def delete_all_vectors(namespace: str = "ns1"):
         raise HTTPException(status_code=400, detail=result["message"])
     return DeleteAllResponse(**result)
 
-@app.get("/")
-def read_root():
-    """
-    Root endpoint returning a welcome message.
-    """
-    return {"message": "Hello, FastAPI!"}
+
     
 @app.get("/test")
 def read_root():
