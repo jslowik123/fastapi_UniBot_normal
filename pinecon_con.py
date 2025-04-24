@@ -204,7 +204,7 @@ class PineconeCon:
                 })
         return numbered_results
 
-    def delete_all(self, namespace: str = "ns1") -> None:
+    def delete_namespace(self, namespace: str = "ns1") -> None:
         """
         Delete all vectors from the specified namespace.
         
