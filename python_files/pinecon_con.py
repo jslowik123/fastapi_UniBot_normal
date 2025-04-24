@@ -2,7 +2,7 @@ import os
 import time
 from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Union
 import numpy as np
 
 class PineconeCon:
@@ -33,7 +33,7 @@ class PineconeCon:
         self._index = self._pc.Index(index_name)
         self._index_name = index_name
 
-    def _chunk_text(self, text: str | List[str], max_bytes: int = 40960*0.5) -> List[str]:
+    def _chunk_text(self, text: Union[str, List[str]], max_bytes: int = 40960*0.5) -> List[str]:
         """
         Split text into chunks of maximum size in bytes.
         

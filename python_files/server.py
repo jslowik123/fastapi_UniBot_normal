@@ -1,12 +1,13 @@
 from fastapi import FastAPI, UploadFile, Form, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 import PyPDF2
 from dotenv import load_dotenv
 import os
 import uvicorn
-from python_files.pinecon_con import PineconeCon
-from python_files.chatbot import get_bot, message_bot
+from pinecon_con import PineconeCon
+from chatbot import get_bot, message_bot
 from typing import Dict, List, Optional
 from pydantic import BaseModel, constr
 
@@ -18,6 +19,16 @@ if not pinecone_api_key:
     raise ValueError("PINECONE_API_KEY not found in environment variables")
 
 app = FastAPI()
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
+)
+
 pc = Pinecone(api_key=pinecone_api_key)
 con = PineconeCon("quickstart")
 
@@ -173,7 +184,7 @@ async def send_message(user_input: str):
     )
 
 @app.post("/create_namespace", response_model=NamespaceResponse)
-async def create_namespace(namespace: str, dimension: int = 1536):
+async def create_namespace(namespace: str, dimension: int = 1024):
     """
     Create a new namespace in Pinecone with a dummy vector.
     

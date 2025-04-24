@@ -3,7 +3,7 @@ from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
 from dotenv import load_dotenv
-from python_files.pinecon_con import PineconeCon
+from pinecon_con import PineconeCon
 
 
 def get_bot():
