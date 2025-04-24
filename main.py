@@ -86,6 +86,9 @@ class NamespaceRequest(BaseModel):
 class DeleteAllRequest(BaseModel):
     namespace: str = "ns1"
 
+class DeleteNamespaceRequest(BaseModel):
+    namespace: str
+
 @app.get("/")
 async def root():
     """
@@ -245,6 +248,38 @@ async def delete_all_vectors(request: DeleteAllRequest):
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
     return DeleteAllResponse(**result)
+
+@app.post("/delete_namespace", response_model=DeleteAllResponse)
+async def delete_namespace(request: DeleteNamespaceRequest):
+    """
+    Delete a namespace and all its associated files from Pinecone.
+    
+    Args:
+        request: DeleteNamespaceRequest containing the namespace to delete
+        
+    Returns:
+        DeleteAllResponse with operation status
+    """
+    try:
+        # First delete all vectors in the namespace
+        delete_result = con.delete_all(request.namespace)
+        if delete_result["status"] == "error":
+            raise HTTPException(status_code=400, detail=delete_result["message"])
+            
+        # Then delete the namespace itself
+        namespace_result = con.delete_namespace(request.namespace)
+        if namespace_result["status"] == "error":
+            raise HTTPException(status_code=400, detail=namespace_result["message"])
+            
+        return DeleteAllResponse(
+            status="success",
+            message=f"Namespace {request.namespace} and all its files deleted successfully"
+        )
+    except Exception as e:
+        return DeleteAllResponse(
+            status="error",
+            message=f"Error deleting namespace: {str(e)}"
+        )
 
 @app.get("/test")
 def read_root():
