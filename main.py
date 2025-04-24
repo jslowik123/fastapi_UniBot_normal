@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pinecone import Pinecone
+import pinecone
 import PyPDF2
 from dotenv import load_dotenv
 import os
@@ -28,7 +28,8 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-pc = Pinecone(api_key=pinecone_api_key)
+pc = pinecone.Pinecone(api_key=pinecone_api_key)
+
 con = PineconeCon("quickstart")
 
 # Chat state management
@@ -226,5 +227,5 @@ def read_root():
     return {"message": "Hello, test"}
 
 if __name__ == "__main__":
-    uvicorn.run("server:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", 8000)), reload=True)
     
