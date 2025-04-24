@@ -1,7 +1,6 @@
 from fastapi import FastAPI, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pinecone import Pinecone
-from sentence_transformers import SentenceTransformer
 import PyPDF2
 from dotenv import load_dotenv
 import os
