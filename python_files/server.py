@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, Form
+from fastapi import FastAPI, UploadFile, Form, HTTPException
 from pinecone import Pinecone
 from sentence_transformers import SentenceTransformer
 import PyPDF2
@@ -8,7 +8,7 @@ import uvicorn
 from python_files.pinecon_con import PineconeCon
 from python_files.chatbot import get_bot, message_bot
 from typing import Dict, List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, constr
 
 load_dotenv()
 
@@ -42,6 +42,17 @@ class UploadResponse(BaseModel):
 class QueryResponse(BaseModel):
     status: str
     results: List[Dict[str, str]]
+
+class NamespaceResponse(BaseModel):
+    status: str
+    message: str
+    namespace: str
+    vector_id: Optional[str] = None
+    dimension: Optional[int] = None
+
+class DeleteAllResponse(BaseModel):
+    status: str
+    message: str
 
 @app.post("/upload", response_model=UploadResponse)
 async def upload_file(file: UploadFile, namespace: str = Form(...)):
@@ -160,6 +171,40 @@ async def send_message(user_input: str):
         status="success",
         response=response
     )
+
+@app.post("/create_namespace", response_model=NamespaceResponse)
+async def create_namespace(namespace: str, dimension: int = 1536):
+    """
+    Create a new namespace in Pinecone with a dummy vector.
+    
+    Args:
+        namespace: Name of the namespace to create (must be non-empty)
+        dimension: Dimension of the vector (default: 1536)
+        
+    Returns:
+        NamespaceResponse with creation status and details
+    """
+    result = con.create_namespace_with_dummy(namespace, dimension)
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["message"])
+    return NamespaceResponse(**result)
+
+
+@app.post("/delete_all", response_model=DeleteAllResponse)
+async def delete_all_vectors(namespace: str = "ns1"):
+    """
+    Delete all vectors from a namespace.
+    
+    Args:
+        namespace: The namespace to clear (default: "ns1")
+        
+    Returns:
+        DeleteAllResponse with operation status
+    """
+    result = con.delete_all(namespace)
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["message"])
+    return DeleteAllResponse(**result)
 
 @app.get("/")
 def read_root():

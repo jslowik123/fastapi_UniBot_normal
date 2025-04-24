@@ -3,7 +3,7 @@ import time
 from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 from typing import List, Dict, Any, Optional
-
+import numpy as np
 
 class PineconeCon:
     """
@@ -212,6 +212,43 @@ class PineconeCon:
             namespace: Pinecone namespace to use (default: "ns1")
         """
         self._index.delete(namespace=namespace, delete_all=True)
+
+    def create_namespace_with_dummy(self, namespace: str, dimension: int = 1024) -> Dict[str, Any]:
+        """
+        Create a new namespace and upload a dummy vector.
+        
+        Args:
+            namespace: Name of the new namespace to create
+            dimension: Dimension of the vector (default: 1024)
+            
+        Returns:
+            Dictionary containing the operation status and details
+        """
+        # Generate a random vector
+        dummy_vector = np.random.rand(dimension).tolist()
+        
+        # Create and upload vector
+        vector = {
+            "id": "dummy_vector_1",
+            "values": dummy_vector,
+            "metadata": {
+                "type": "dummy",
+                "description": "Initial dummy vector"
+            }
+        }
+        
+        self._index.upsert(
+            vectors=[vector],
+            namespace=namespace
+        )
+        
+        return {
+            "status": "success",
+            "message": f"Namespace '{namespace}' created with dummy vector",
+            "namespace": namespace,
+            "vector_id": "dummy_vector_1",
+            "dimension": dimension
+        }
 
 
 def delete_all():
