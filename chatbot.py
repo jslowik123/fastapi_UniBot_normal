@@ -52,4 +52,5 @@ def message_bot(user_input, context, chat_history):
     chat_history.append(HumanMessage(content=user_input))
     chat_history.append(AIMessage(content=response.content))
     print("AI:" + response.content)
+    return response.content
 

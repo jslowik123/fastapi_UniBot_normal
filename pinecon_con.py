@@ -150,7 +150,8 @@ class PineconeCon:
                 })
         self._index.upsert(
             vectors=vectors,
-            namespace=namespace
+            namespace=namespace,
+            
         )
 
     def delete_embeddings(self, file_name: str, namespace: str = "ns1") -> None:
