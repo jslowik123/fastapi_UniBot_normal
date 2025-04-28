@@ -116,7 +116,7 @@ class PineconeCon:
             embeddings = []
             for chunk in numbered_chunks:
                 response = self._openai.embeddings.create(
-                    model="text-embedding-ada-002",
+                    model="text-embedding-3-small",
                     input=chunk
                 )
                 embeddings.append(response.data[0].embedding)
@@ -182,7 +182,7 @@ class PineconeCon:
         """
         # Create embedding using OpenAI
         response = self._openai.embeddings.create(
-            model="text-embedding-ada-002",
+            model="text-embedding-3-small",
             input=query
         )
         embedding = response.data[0].embedding
@@ -214,13 +214,13 @@ class PineconeCon:
         """
         self._index.delete(namespace=namespace, delete_all=True)
 
-    def create_namespace_with_dummy(self, namespace: str, dimension: int = 1024) -> Dict[str, Any]:
+    def create_namespace_with_dummy(self, namespace: str, dimension: int = 1536) -> Dict[str, Any]:
         """
         Create a new namespace and upload a dummy vector.
         
         Args:
             namespace: Name of the new namespace to create
-            dimension: Dimension of the vector (default: 1024)
+            dimension: Dimension of the vector (default: 1536 for OpenAI embeddings)
             
         Returns:
             Dictionary containing the operation status and details
@@ -256,7 +256,7 @@ def delete_all():
     load_dotenv(dotenv_path=".env")
     api_key = os.getenv("PINECOIN_API_KEY")
     pc = Pinecone(api_key=api_key)
-    index = pc.Index("quickstart")
+    index = pc.Index("userfiles")
 
     # Alle Vektoren löschen
     index.delete(namespace="ns1", delete_all=True)

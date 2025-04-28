@@ -27,7 +27,7 @@ app.add_middleware(
 )
 
 pc = pinecone.Pinecone(api_key=pinecone_api_key)
-con = PineconeCon("quickstart")
+con = PineconeCon("userfiles")
 
 # Chat State
 class ChatState:
@@ -102,11 +102,24 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
 
 # Create a namespace
 @app.post("/create_namespace")
-async def create_namespace(namespace: str = Form(...), dimension: int = Form(1024)):
-    result = con.create_namespace_with_dummy(namespace, dimension)
-    if result["status"] == "error":
-        raise HTTPException(status_code=400, detail=result["message"])
-    return result
+async def create_namespace(namespace: str = Form(...), dimension: int = Form(1536)):
+    """
+    Create a new namespace in the Pinecone index.
+    
+    Args:
+        namespace: Name of the namespace to create
+        dimension: Dimension of the vectors (default: 1536 for OpenAI embeddings)
+    """
+    try:
+        # Initialize Pinecone connection
+        pc = PineconeCon("uni")
+        
+        # Create namespace
+        pc.create_namespace(namespace)
+        
+        return {"status": "success", "message": f"Namespace {namespace} created successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 # Delete all vectors in a namespace
 @app.post("/delete_all")
