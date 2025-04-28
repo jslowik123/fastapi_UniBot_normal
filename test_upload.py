@@ -14,7 +14,7 @@ def upload_pdf(pdf_path: str, namespace: str = "WING"):
             files={"file": (pdf_path, f, "application/pdf")},
             data={"namespace": namespace}
         )
-    return response.json()
+    return response
 
 if __name__ == "__main__":
     result = upload_pdf("test.pdf")

@@ -21,13 +21,9 @@ class PineconeCon:
         Args:
             index_name: Name of the Pinecone index to use
         """
-        load_dotenv(dotenv_path=".env")
-        api_key = os.getenv("PINECONE_API_KEY")
-        if not api_key:
-            raise ValueError("PINECONE_API_KEY not found in environment variables")
-            
-        self._pc = Pinecone(api_key=api_key)
-        self._openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        load_dotenv(dotenv_path=".env")          
+        self._pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+        self._openai = OpenAI()
 
         while not self._pc.describe_index(index_name).status['ready']:
             time.sleep(1)
