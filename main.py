@@ -26,8 +26,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Initialize Pinecone connection
 pc = pinecone.Pinecone(api_key=pinecone_api_key)
 con = PineconeCon("userfiles")
+
+
 
 # Chat State
 class ChatState:
@@ -112,7 +115,7 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
     """
     try:
         # Initialize Pinecone connection
-        pc = PineconeCon("uni")
+        pc = PineconeCon("userfiles")
         
         # Create namespace
         pc.create_namespace(namespace)

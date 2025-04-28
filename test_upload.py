@@ -17,8 +17,11 @@ def upload_pdf(pdf_path: str, namespace: str = "WING"):
             files={"file": (pdf_path, f, "application/pdf")},
             data={"namespace": namespace}
         )
-    return response.text  # Return the response message as text
+    return response  # Return the response as JSON
 
 if __name__ == "__main__":
-    result = upload_pdf("tipps_fuer_studierende.pdf")
-    print(result)
+    response = requests.post(
+            "https://uni-chatbot-e2bc39ffc8de.herokuapp.com/create_namespace",
+            data={"namespace": "new namespace for test", "dimension":1536}
+        )
+    print(response.json())  # Print the full response content

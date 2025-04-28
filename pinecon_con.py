@@ -258,6 +258,4 @@ def delete_all():
     pc = Pinecone(api_key=api_key)
     index = pc.Index("userfiles")
 
-    # Alle Vektoren löschen
-    index.delete(namespace="ns1", delete_all=True)
 
