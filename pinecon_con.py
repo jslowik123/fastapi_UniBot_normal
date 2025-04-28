@@ -23,7 +23,7 @@ class PineconeCon:
         """
         load_dotenv(dotenv_path=".env")          
         self._pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        self._openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        self._openai = OpenAI()
 
         while not self._pc.describe_index(index_name).status['ready']:
             time.sleep(1)
