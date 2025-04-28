@@ -4,6 +4,7 @@ from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 from typing import List, Dict, Any, Optional, Union
 import numpy as np
+from openai import OpenAI
 
 class PineconeCon:
     """
@@ -26,6 +27,7 @@ class PineconeCon:
             raise ValueError("PINECONE_API_KEY not found in environment variables")
             
         self._pc = Pinecone(api_key=api_key)
+        self._openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
         while not self._pc.describe_index(index_name).status['ready']:
             time.sleep(1)
@@ -99,7 +101,7 @@ class PineconeCon:
 
     def create_embeddings(self, data: List[Dict[str, str]]) -> List[Any]:
         """
-        Create embeddings for the given data using Pinecone's multilingual model.
+        Create embeddings for the given data using OpenAI's embedding model.
         
         Args:
             data: List of dictionaries containing file and content information
@@ -113,11 +115,15 @@ class PineconeCon:
             chunks = self._chunk_text(doc["content"])
             # Number the chunks
             numbered_chunks = [f"{i+1}. {chunk}" for i, chunk in enumerate(chunks)]
-            embeddings = self._pc.inference.embed(
-                model="multilingual-e5-large",
-                inputs=numbered_chunks,
-                parameters={"input_type": "passage", "truncate": "END"}
-            )
+            
+            # Create embeddings using OpenAI
+            embeddings = []
+            for chunk in numbered_chunks:
+                response = self._openai.embeddings.create(
+                    model="text-embedding-ada-002",
+                    input=chunk
+                )
+                embeddings.append(response.data[0].embedding)
             list_embeddings.append(embeddings)
         return list_embeddings
 
@@ -141,7 +147,7 @@ class PineconeCon:
                 
                 vectors.append({
                     "id": patch_id,
-                    "values": e['values'],
+                    "values": e,
                     "metadata": {
                         'text': chunk_text,
                         'file': d['file'],
@@ -151,7 +157,6 @@ class PineconeCon:
         self._index.upsert(
             vectors=vectors,
             namespace=namespace,
-            
         )
 
     def delete_embeddings(self, file_name: str, namespace: str = "ns1") -> None:
@@ -179,17 +184,16 @@ class PineconeCon:
         Returns:
             List of top results with their metadata
         """
-        embedding = self._pc.inference.embed(
-            model="multilingual-e5-large",
-            inputs=[query],
-            parameters={
-                "input_type": "query"
-            }
+        # Create embedding using OpenAI
+        response = self._openai.embeddings.create(
+            model="text-embedding-ada-002",
+            input=query
         )
+        embedding = response.data[0].embedding
 
         results = self._index.query(
             namespace=namespace,
-            vector=embedding[0].values,
+            vector=embedding,
             top_k=num_results,
             include_values=False,
             include_metadata=True
