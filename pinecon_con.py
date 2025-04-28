@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from pinecone import Pinecone, ServerlessSpec
 from typing import List, Dict, Any, Optional, Union
 import numpy as np
-from openai import OpenAI
+import openai
 
 class PineconeCon:
     """
@@ -23,7 +23,7 @@ class PineconeCon:
         """
         load_dotenv(dotenv_path=".env")          
         self._pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
-        self._openai = OpenAI()
+        openai.api_key = os.getenv("OPENAI_API_KEY")
 
         while not self._pc.describe_index(index_name).status['ready']:
             time.sleep(1)
@@ -115,7 +115,7 @@ class PineconeCon:
             # Create embeddings using OpenAI
             embeddings = []
             for chunk in numbered_chunks:
-                response = self._openai.embeddings.create(
+                response = openai.embeddings.create(
                     model="text-embedding-ada-002",
                     input=chunk
                 )
@@ -181,7 +181,7 @@ class PineconeCon:
             List of top results with their metadata
         """
         # Create embedding using OpenAI
-        response = self._openai.embeddings.create(
+        response = openai.embeddings.create(
             model="text-embedding-ada-002",
             input=query
         )
