@@ -76,7 +76,7 @@ async def search_query(query: str = Form(...)):
             for match in results
         ]
     }
-
+    
 # Start the chatbot
 @app.post("/start_bot")
 async def start_bot():
@@ -89,15 +89,15 @@ async def start_bot():
 async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     if not chat_state.chain:
         return {"status": "error", "message": "Bot not started. Please call /start_bot first"}
-
+    
     results = con.query(user_input, namespace=namespace)
     context = "\n".join([match["text"] for match in results])
-
+    
     response = message_bot(user_input, context, chat_state.chat_history)
-
+    
     chat_state.chat_history.append({"role": "user", "content": user_input})
     chat_state.chat_history.append({"role": "assistant", "content": response})
-
+    
     return {"status": "success", "response": response}
 
 # Create a namespace
@@ -135,3 +135,4 @@ def read_root():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
+    
