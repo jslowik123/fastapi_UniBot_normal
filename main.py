@@ -118,7 +118,7 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
         pc = PineconeCon("userfiles")
         
         # Create namespace
-        pc.create_namespace(namespace)
+        pc.create_namespace_with_dummy(namespace)
         
         return {"status": "success", "message": f"Namespace {namespace} created successfully"}
     except Exception as e:
