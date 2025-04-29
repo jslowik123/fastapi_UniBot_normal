@@ -1,6 +1,6 @@
 import requests
 
-def upload_pdf(pdf_path: str, namespace: str = "WING"):
+def upload_pdf(pdf_path: str, namespace: str = "was geht"):
     """
     Upload a local PDF file directly to the server.
     
@@ -20,8 +20,5 @@ def upload_pdf(pdf_path: str, namespace: str = "WING"):
     return response  # Return the response as JSON
 
 if __name__ == "__main__":
-    response = requests.post(
-            "https://uni-chatbot-e2bc39ffc8de.herokuapp.com/create_namespace",
-            data={"namespace": "new namespace for test", "dimension":1536}
-        )
-    print(response.json())  # Print the full response content
+    response = upload_pdf("test.pdf")
+    print(response.json())
