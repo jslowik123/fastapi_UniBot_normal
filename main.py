@@ -49,7 +49,7 @@ async def root():
     return {"message": "Welcome to the Uni Chatbot API", "status": "online", "version": "1.0.0"}
 
 # Upload PDF file
-@app.post("/upload")
+@app.post("/upload", timeout=300)  # 5 minutes timeout
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
     try:
         # Save the uploaded file temporarily
@@ -97,9 +97,12 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
         return {"status": "error", "message": "Bot not started. Please call /start_bot first"}
     
     results = con.query(user_input, namespace=namespace)
+    knowledge = con.query(user_input, namespace="knowledge")
+
     context = "\n".join([match["text"] for match in results])
+    knowledge = "\n".join([match["text"] for match in knowledge])
     
-    response = message_bot(user_input, context, chat_state.chat_history)
+    response = message_bot(user_input, context, knowledge, chat_state.chat_history)
     
     chat_state.chat_history.append({"role": "user", "content": user_input})
     chat_state.chat_history.append({"role": "assistant", "content": response})
@@ -195,5 +198,11 @@ async def chat(message: str = Form(...), namespace: str = Form(...)):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=port,
+        timeout_keep_alive=120,  # Keep-alive timeout in seconds
+        timeout_graceful_shutdown=120  # Graceful shutdown timeout in seconds
+    )
     
