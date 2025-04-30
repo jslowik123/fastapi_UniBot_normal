@@ -47,10 +47,39 @@ def get_bot():
     return chain
 
 def message_bot(user_input, context, chat_history):
-    chain = get_bot()
-    response = chain.invoke({"input": user_input, "context": context, "chat_history": chat_history})
-    chat_history.append(HumanMessage(content=user_input))
-    chat_history.append(AIMessage(content=response.content))
-    print("AI:" + response.content)
-    return response.content
+    try:
+        # Validate inputs
+        if not user_input or not isinstance(user_input, str):
+            return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
+        
+        if not isinstance(chat_history, list):
+            chat_history = []
+            
+        if not context or not isinstance(context, str):
+            context = ""
+
+        # Get bot instance
+        chain = get_bot()
+        
+        # Invoke chain with validated inputs
+        response = chain.invoke({
+            "input": user_input,
+            "context": context,
+            "chat_history": chat_history
+        })
+        
+        # Validate response
+        if not response or not hasattr(response, 'content'):
+            return "Entschuldigung, ich konnte keine Antwort generieren."
+            
+        # Update chat history with validated messages
+        chat_history.append(HumanMessage(content=user_input))
+        chat_history.append(AIMessage(content=response.content))
+        
+        print("AI:" + response.content)
+        return response.content
+        
+    except Exception as e:
+        print(f"Error in message_bot: {str(e)}")
+        return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
