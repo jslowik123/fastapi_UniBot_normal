@@ -7,11 +7,14 @@ import os
 import uvicorn
 from pinecon_con import PineconeCon
 from chatbot import get_bot, message_bot
+from pdf_processor import PDFProcessor
+import tempfile
 
 load_dotenv()
 
 # Load Pinecone API Key
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
+openai_api_key = os.getenv("OPENAI_API_KEY")
 if not pinecone_api_key:
     raise ValueError("PINECONE_API_KEY not found in environment variables")
 
@@ -29,7 +32,7 @@ app.add_middleware(
 # Initialize Pinecone connection
 pc = pinecone.Pinecone(api_key=pinecone_api_key)
 con = PineconeCon("userfiles")
-
+pdf_processor = PDFProcessor(pinecone_api_key, openai_api_key)
 
 
 # Chat State
@@ -49,16 +52,19 @@ async def root():
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
     try:
-        pdf = PyPDF2.PdfReader(file.file)
-        text = "".join(page.extract_text() for page in pdf.pages)
-        data = [{
-            'file': file.filename,
-            'content': text
-        }]
-        embedding = con.create_embeddings(data)
-        con.upload_embeddings(data, embedding, namespace=namespace)
+        # Save the uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
 
-        return {"status": "success", "message": f"File {file.filename} uploaded and processed successfully", "filename": file.filename}
+        # Process the PDF
+        result = pdf_processor.process_pdf(temp_file_path, namespace)
+        
+        # Clean up the temporary file
+        os.unlink(temp_file_path)
+        
+        return result
     except Exception as e:
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
@@ -70,14 +76,11 @@ async def delete_file(file_name: str = Form(...), namespace: str = Form(...)):
 
 # Query Pinecone
 @app.post("/query")
-async def search_query(query: str = Form(...)):
-    results = con.query(query)
+async def search_query(query: str = Form(...), namespace: str = Form(...)):
+    results = con.query(query, namespace=namespace)
     return {
         "status": "success",
-        "results": [
-            {"text": match["metadata"]["text"], "score": match["score"], "file": match["metadata"]["file"]}
-            for match in results
-        ]
+        "results": results
     }
     
 # Start the chatbot
@@ -118,7 +121,7 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
         pc = PineconeCon("userfiles")
         
         # Create namespace
-        pc.create_namespace_with_dummy(namespace)
+        pc.create_namespace(namespace)
         
         return {"status": "success", "message": f"Namespace {namespace} created successfully"}
     except Exception as e:
@@ -135,18 +138,60 @@ async def delete_all_vectors(namespace: str = Form(...)):
 # Delete a namespace
 @app.post("/delete_namespace")
 async def delete_namespace(namespace: str = Form(...)):
+    """
+    Delete a namespace from the Pinecone index.
+    
+    Args:
+        namespace: Name of the namespace to delete
+    """
     try:
-        delete_result = con.delete_namespace(namespace)
-        if delete_result["status"] == "error":
-            raise HTTPException(status_code=400, detail=delete_result["message"])
+        # Initialize Pinecone connection
+        pc = PineconeCon("userfiles")
+        
+        # Delete namespace
+        pc.delete_namespace(namespace)
+        
         return {"status": "success", "message": f"Namespace {namespace} deleted successfully"}
     except Exception as e:
-        return {"status": "error", "message": f"Error deleting namespace: {str(e)}"}
+        return {"status": "error", "message": str(e)}
 
 # Test endpoint
 @app.get("/test")
 def read_root():
     return {"message": "Hello, test"}
+
+# Chat endpoint
+@app.post("/chat")
+async def chat(message: str = Form(...), namespace: str = Form(...)):
+    """
+    Process a chat message and return a response.
+    
+    Args:
+        message: The user's message
+        namespace: Pinecone namespace to use
+    """
+    try:
+        # Get relevant context from Pinecone
+        results = con.query(message, namespace=namespace)
+        
+        # Format context for the prompt
+        context = "\n".join([f"Document {i+1}: {r['text']}" for i, r in enumerate(results)])
+        
+        # Create chat completion
+        response = con._openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant. Use the following context to answer the user's question. If the context doesn't contain relevant information, say so."},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {message}"}
+            ]
+        )
+        
+        return {
+            "status": "success",
+            "response": response.choices[0].message.content
+        }
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
