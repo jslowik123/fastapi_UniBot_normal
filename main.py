@@ -49,7 +49,7 @@ async def root():
     return {"message": "Welcome to the Uni Chatbot API", "status": "online", "version": "1.0.0"}
 
 
-@app.post("/upload", timeout=300)
+@app.post("/upload")
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
     try:
         
