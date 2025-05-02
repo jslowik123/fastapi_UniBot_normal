@@ -5,14 +5,14 @@ import PyPDF2
 from dotenv import load_dotenv
 import os
 import uvicorn
-from pinecon_con import PineconeCon
+from pinecone_connection import PineconeCon
 from chatbot import get_bot, message_bot
-from pdf_processor import PDFProcessor
+from doc_processor import DocProcessor
 import tempfile
 
 load_dotenv()
 
-# Load Pinecone API Key
+
 pinecone_api_key = os.getenv("PINECONE_API_KEY")
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not pinecone_api_key:
@@ -20,7 +20,7 @@ if not pinecone_api_key:
 
 app = FastAPI()
 
-# Add CORS Middleware
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -29,13 +29,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Pinecone connection
+
 pc = pinecone.Pinecone(api_key=pinecone_api_key)
 con = PineconeCon("userfiles")
-pdf_processor = PDFProcessor(pinecone_api_key, openai_api_key)
+doc_processor = DocProcessor(pinecone_api_key, openai_api_key)
 
 
-# Chat State
+
 class ChatState:
     def __init__(self):
         self.chain = None
@@ -43,38 +43,37 @@ class ChatState:
 
 chat_state = ChatState()
 
-# Root endpoint
+
 @app.get("/")
 async def root():
     return {"message": "Welcome to the Uni Chatbot API", "status": "online", "version": "1.0.0"}
 
-# Upload PDF file
-@app.post("/upload", timeout=300)  # 5 minutes timeout
+
+@app.post("/upload", timeout=300)
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
     try:
-        # Save the uploaded file temporarily
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
 
-        # Process the PDF
-        result = pdf_processor.process_pdf(temp_file_path, namespace)
         
-        # Clean up the temporary file
+        result = doc_processor.process_pdf(temp_file_path, namespace)
+        
+        
         os.unlink(temp_file_path)
         
         return result
     except Exception as e:
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
-# Delete a specific file's embeddings
 @app.post("/delete")
 async def delete_file(file_name: str = Form(...), namespace: str = Form(...)):
     con.delete_embeddings(file_name, namespace)
     return {"status": "success", "message": f"File {file_name} deleted successfully"}
 
-# Query Pinecone
+
 @app.post("/query")
 async def search_query(query: str = Form(...), namespace: str = Form(...)):
     results = con.query(query, namespace=namespace)
@@ -83,14 +82,14 @@ async def search_query(query: str = Form(...), namespace: str = Form(...)):
         "results": results
     }
     
-# Start the chatbot
+
 @app.post("/start_bot")
 async def start_bot():
     chat_state.chain = get_bot()
     chat_state.chat_history = []
     return {"status": "success", "message": "Bot started successfully"}
 
-# Send a message to chatbot
+
 @app.post("/send_message")
 async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     if not chat_state.chain:
@@ -109,7 +108,7 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     
     return {"status": "success", "response": response}
 
-# Create a namespace
+
 @app.post("/create_namespace")
 async def create_namespace(namespace: str = Form(...), dimension: int = Form(1536)):
     """
@@ -120,17 +119,16 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
         dimension: Dimension of the vectors (default: 1536 for OpenAI embeddings)
     """
     try:
-        # Initialize Pinecone connection
+        
         pc = PineconeCon("userfiles")
         
-        # Create namespace
+        
         pc.create_namespace(namespace)
         
         return {"status": "success", "message": f"Namespace {namespace} created successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# Delete all vectors in a namespace
 @app.post("/delete_all")
 async def delete_all_vectors(namespace: str = Form(...)):
     result = con.delete_all(namespace)
@@ -138,7 +136,7 @@ async def delete_all_vectors(namespace: str = Form(...)):
         raise HTTPException(status_code=400, detail=result["message"])
     return result
 
-# Delete a namespace
+
 @app.post("/delete_namespace")
 async def delete_namespace(namespace: str = Form(...)):
     """
@@ -148,53 +146,16 @@ async def delete_namespace(namespace: str = Form(...)):
         namespace: Name of the namespace to delete
     """
     try:
-        # Initialize Pinecone connection
+        
         pc = PineconeCon("userfiles")
         
-        # Delete namespace
+        
         pc.delete_namespace(namespace)
         
         return {"status": "success", "message": f"Namespace {namespace} deleted successfully"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# Test endpoint
-@app.get("/test")
-def read_root():
-    return {"message": "Hello, test"}
-
-# Chat endpoint
-@app.post("/chat")
-async def chat(message: str = Form(...), namespace: str = Form(...)):
-    """
-    Process a chat message and return a response.
-    
-    Args:
-        message: The user's message
-        namespace: Pinecone namespace to use
-    """
-    try:
-        # Get relevant context from Pinecone
-        results = con.query(message, namespace=namespace)
-        
-        # Format context for the prompt
-        context = "\n".join([f"Document {i+1}: {r['text']}" for i, r in enumerate(results)])
-        
-        # Create chat completion
-        response = con._openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant. Use the following context to answer the user's question. If the context doesn't contain relevant information, say so."},
-                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {message}"}
-            ]
-        )
-        
-        return {
-            "status": "success",
-            "response": response.choices[0].message.content
-        }
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
@@ -202,7 +163,7 @@ if __name__ == "__main__":
         "main:app", 
         host="0.0.0.0", 
         port=port,
-        timeout_keep_alive=120,  # Keep-alive timeout in seconds
-        timeout_graceful_shutdown=120  # Graceful shutdown timeout in seconds
+        timeout_keep_alive=120,
+        timeout_graceful_shutdown=120
     )
     

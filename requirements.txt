@@ -7,3 +7,4 @@ python-dotenv==1.0.1
 langchain==0.1.12
 langchain-openai==0.0.8
 openai==1.76.0
+firebase-admin==6.8.0
