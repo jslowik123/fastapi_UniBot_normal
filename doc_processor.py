@@ -1,6 +1,6 @@
 from openai import OpenAI
 import PyPDF2
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from pinecone import Pinecone
 import json
 import os
@@ -26,7 +26,13 @@ class DocProcessor:
         self._openai = OpenAI(api_key=openai_api_key)
         self._pinecone = Pinecone(api_key=pinecone_api_key)
         self._con = PineconeCon("userfiles")
-        self._firebase = FirebaseConnection()
+        
+        try:
+            self._firebase = FirebaseConnection()
+            self._firebase_available = True
+        except ValueError as e:
+            print(f"Firebase nicht verfügbar: {e}")
+            self._firebase_available = False
 
     def process_pdf(self, file_path: str, namespace: str = "ns1") -> Dict[str, Any]:
         """
@@ -53,13 +59,15 @@ class DocProcessor:
             
             pinecone_result = self._con.upload(chunks, namespace, file_name)
             
-            firebase_result = self._firebase.append_metadata(
-                namespace=namespace,
-                file_name=file_name,
-                chunk_count=len(chunks),
-                keywords=keywords,
-                summary=summary
-            )
+            firebase_result = None
+            if self._firebase_available:
+                firebase_result = self._firebase.append_metadata(
+                    namespace=namespace,
+                    file_name=file_name,
+                    chunk_count=len(chunks),
+                    keywords=keywords,
+                    summary=summary
+                )
             
             return {
                 "status": "success",
