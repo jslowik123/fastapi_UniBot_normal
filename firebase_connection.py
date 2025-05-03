@@ -4,6 +4,8 @@ from firebase_admin import db
 from typing import Dict, Any, List
 import json
 import os
+import re
+
 class FirebaseConnection:
     def __init__(self):
         """
@@ -49,6 +51,7 @@ class FirebaseConnection:
         
         Args:
             namespace: Der Namespace, in dem das Dokument gespeichert ist
+            file_name: Der Name der Datei
             fileID: Die ID des Dokuments
             chunk_count: Die Anzahl der Chunks
             keywords: Liste der Schlüsselwörter
@@ -63,6 +66,7 @@ class FirebaseConnection:
             
             # Metadaten speichern
             ref.set({
+                'file_name': file_name,
                 'chunk_count': chunk_count,
                 'keywords': keywords,
                 'summary': summary,
@@ -72,28 +76,28 @@ class FirebaseConnection:
             return {
                 'status': 'success',
                 'message': f'Metadaten für {file_name} erfolgreich gespeichert',
-                'path': f'documents/{namespace}/{file_name}'
+                'path': f'documents/{namespace}/{fileID}'
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': str(e)
+                'message': f'Fehler beim Firebase-Upload: {str(e)}'
             }
     
-    def get_document_metadata(self, namespace: str, file_name: str) -> Dict[str, Any]:
+    def get_document_metadata(self, namespace: str, fileID: str) -> Dict[str, Any]:
         """
         Ruft die Metadaten eines Dokuments ab.
         
         Args:
             namespace: Der Namespace, in dem das Dokument gespeichert ist
-            file_name: Der Name der Datei
+            fileID: Die ID des Dokuments
             
         Returns:
             Dict mit den Metadaten oder Fehlermeldung
         """
         try:
-            ref = self._db.reference(f'documents/{namespace}/{file_name.replace(".", "_")}')
+            ref = self._db.reference(f'documents/{namespace}/{fileID}')
             data = ref.get()
             
             if data:
@@ -104,7 +108,7 @@ class FirebaseConnection:
             else:
                 return {
                     'status': 'error',
-                    'message': f'Keine Metadaten für {file_name} gefunden'
+                    'message': f'Keine Metadaten für {fileID} gefunden'
                 }
                 
         except Exception as e:
