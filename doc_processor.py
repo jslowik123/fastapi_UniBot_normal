@@ -73,9 +73,6 @@ class DocProcessor:
                 "status": "success",
                 "message": f"File {file_name} processed successfully",
                 "chunks": len(chunks),
-                "cleaned_text": cleaned_text,
-                "keywords": keywords,
-                "summary": summary,
                 "pinecone_result": pinecone_result,
                 "firebase_result": firebase_result,
                 "original_file": file_path
@@ -146,26 +143,3 @@ class DocProcessor:
             
         return chunks
 
-
-# Beispielaufruf
-if __name__ == "__main__":
-    import os
-    from dotenv import load_dotenv
-    
-    # API-Keys aus .env Datei laden oder direkt angeben
-    load_dotenv()
-    
-    # API-Keys
-    pinecone_api_key = os.getenv("PINECONE_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    
-    # Instanz erstellen
-    processor = DocProcessor(
-        pinecone_api_key=pinecone_api_key,
-        openai_api_key=openai_api_key
-    )
-    
-    # PDF verarbeiten
-    result = processor.process_pdf("test.pdf")
-    
-    print(result) 
