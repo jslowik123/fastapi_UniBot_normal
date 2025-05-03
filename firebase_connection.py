@@ -44,7 +44,7 @@ class FirebaseConnection:
         
         self._db = db
 
-    def append_metadata(self, namespace: str,file_name: str, fileID: str, chunk_count: int, 
+    def append_metadata(self, namespace: str, file_name: str, fileID: str, chunk_count: int, 
                         keywords: List[str], summary: str) -> Dict[str, Any]:
         """
         Speichert Metadaten zu einem Dokument in Firebase.
@@ -76,7 +76,7 @@ class FirebaseConnection:
             return {
                 'status': 'success',
                 'message': f'Metadaten für {file_name} erfolgreich gespeichert',
-                'path': f'documents/{namespace}/{fileID}'
+                'path': f'files/{namespace}/{fileID}'
             }
             
         except Exception as e:
@@ -97,7 +97,7 @@ class FirebaseConnection:
             Dict mit den Metadaten oder Fehlermeldung
         """
         try:
-            ref = self._db.reference(f'documents/{namespace}/{fileID}')
+            ref = self._db.reference(f'files/{namespace}/{fileID}')
             data = ref.get()
             
             if data:
@@ -129,9 +129,9 @@ class FirebaseConnection:
         """
         try:
             if namespace:
-                ref = self._db.reference(f'documents/{namespace}')
+                ref = self._db.reference(f'files/{namespace}')
             else:
-                ref = self._db.reference('documents')
+                ref = self._db.reference('files')
                 
             data = ref.get()
             
