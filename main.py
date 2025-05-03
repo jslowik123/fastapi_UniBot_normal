@@ -50,7 +50,7 @@ async def root():
 
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
+async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...)):
     try:
         
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
@@ -59,7 +59,7 @@ async def upload_file(file: UploadFile = File(...), namespace: str = Form(...)):
             temp_file_path = temp_file.name
 
         
-        result = doc_processor.process_pdf(temp_file_path, namespace)
+        result = doc_processor.process_pdf(temp_file_path, namespace, fileID)
         
         
         os.unlink(temp_file_path)

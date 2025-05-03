@@ -18,7 +18,7 @@ class PineconeCon:
         self._index = self._pc.Index(index_name)
         self._index_name = index_name
 
-    def upload(self, chunks, namespace: str, file_path: str) -> List[Any]:
+    def upload(self, chunks, namespace: str, file_name: str, fileID: str) -> List[Any]:
         for i, chunk in enumerate(chunks):
                 response = self._openai.embeddings.create(
                     model="text-embedding-3-small",
@@ -29,20 +29,20 @@ class PineconeCon:
                 self._index.upsert(
                     namespace=namespace,
                     vectors=[{
-                        "id": f"{os.path.basename(file_path)}_{i}",
+                        "id": f"{fileID}_{i}",
                         "values": embedding,
                         "metadata": {
                             "text": chunk,
-                            "file": os.path.basename(file_path),
+                            "file": file_name,
                             "chunk_number": i
                         }
                     }]
                 )
         return {
                 "status": "success",
-                "message": f"File {os.path.basename(file_path)} processed successfully",
+                "message": f"File {file_name} processed successfully",
                 "chunks": len(chunks),
-                "original_file": file_path
+                "original_file": file_name
         }
 
     def delete_embeddings(self, file_name: str, namespace: str = "ns1") -> None:

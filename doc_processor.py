@@ -34,7 +34,7 @@ class DocProcessor:
             print(f"Firebase nicht verfügbar: {e}")
             self._firebase_available = False
 
-    def process_pdf(self, file_path: str, namespace: str = "ns1") -> Dict[str, Any]:
+    def process_pdf(self, file_path: str, namespace: str, fileID: str) -> Dict[str, Any]:
         """
         Process a PDF file and store its content in Pinecone.
         
@@ -57,13 +57,14 @@ class DocProcessor:
             
             chunks = self._split_text(cleaned_text)
             
-            pinecone_result = self._con.upload(chunks, namespace, file_name)
+            pinecone_result = self._con.upload(chunks, namespace, file_name, fileID=fileID)
             
             firebase_result = None
             if self._firebase_available:
                 firebase_result = self._firebase.append_metadata(
                     namespace=namespace,
                     file_name=file_name,
+                    fileID=fileID,
                     chunk_count=len(chunks),
                     keywords=keywords,
                     summary=summary
