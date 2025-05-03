@@ -3,8 +3,6 @@ from firebase_admin import credentials
 from firebase_admin import db
 from typing import Dict, Any, List
 import json
-import os
-
 
 class FirebaseConnection:
     def __init__(self):
@@ -149,9 +147,7 @@ class FirebaseConnection:
 if __name__ == "__main__":
     import os
     from dotenv import load_dotenv
-    
     load_dotenv()
-    
     firebase_url = os.getenv("FIREBASE_DATABASE_URL")
     credentials_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
     
