@@ -40,7 +40,7 @@ class PineconeCon:
                 )
         return {
                 "status": "success",
-                "message": f"File {file_name} processed successfully",
+                "message": f"File {fileID} processed successfully",
                 "chunks": len(chunks),
                 "original_file": file_name
         }

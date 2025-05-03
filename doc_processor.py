@@ -41,6 +41,7 @@ class DocProcessor:
         Args:
             file_path: Path to the PDF file
             namespace: Pinecone namespace to use
+            fileID: ID to use for storing document metadata
             
         Returns:
             Dict containing processing results
@@ -58,12 +59,9 @@ class DocProcessor:
             chunks = self._split_text(cleaned_text)
             
             pinecone_result = self._con.upload(chunks, namespace, file_name, fileID=fileID)
-            
-            firebase_result = None
-            if self._firebase_available:
-                firebase_result = self._firebase.append_metadata(
+
+            firebase_result = self._firebase.append_metadata(
                     namespace=namespace,
-                    file_name=file_name,
                     fileID=fileID,
                     chunk_count=len(chunks),
                     keywords=keywords,

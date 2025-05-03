@@ -44,14 +44,12 @@ class FirebaseConnection:
         
         self._db = db
 
-    def append_metadata(self, namespace: str, file_name: str, fileID: str, chunk_count: int, 
-                        keywords: List[str], summary: str) -> Dict[str, Any]:
+    def append_metadata(self, namespace: str, fileID: str, chunk_count: int, keywords: List[str], summary: str) -> Dict[str, Any]:
         """
         Speichert Metadaten zu einem Dokument in Firebase.
         
         Args:
             namespace: Der Namespace, in dem das Dokument gespeichert ist
-            file_name: Der Name der Datei
             fileID: Die ID des Dokuments
             chunk_count: Die Anzahl der Chunks
             keywords: Liste der Schlüsselwörter
@@ -66,16 +64,14 @@ class FirebaseConnection:
             
             # Metadaten speichern
             ref.set({
-                'file_name': file_name,
                 'chunk_count': chunk_count,
                 'keywords': keywords,
                 'summary': summary,
-                'created_at': {'.sv': 'timestamp'}
             })
             
             return {
                 'status': 'success',
-                'message': f'Metadaten für {file_name} erfolgreich gespeichert',
+                'message': f'Metadaten für {fileID} erfolgreich gespeichert',
                 'path': f'files/{namespace}/{fileID}'
             }
             
