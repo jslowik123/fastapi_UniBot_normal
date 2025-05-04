@@ -106,7 +106,7 @@ class PineconeCon:
 
 def delete_all():
     load_dotenv(dotenv_path=".env")
-    api_key = os.getenv("PINECOIN_API_KEY")
+    api_key = os.getenv("PINECONE_API_KEY")
     pc = Pinecone(api_key=api_key)
     index = pc.Index("userfiles")
 

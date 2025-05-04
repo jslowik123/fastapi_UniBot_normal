@@ -54,19 +54,26 @@ class DocProcessor:
                     text += page.extract_text()
 
             file_name = os.path.basename(file_path)
-            cleaned_text, keywords, summary = self._clean_text(text)
+            cleaned_text, keywords, summary = self._recondition_text(text)
             
             chunks = self._split_text(cleaned_text)
             
             pinecone_result = self._con.upload(chunks, namespace, file_name, fileID=fileID)
 
-            firebase_result = self._firebase.append_metadata(
+            firebase_result = None
+            if self._firebase_available:
+                firebase_result = self._firebase.append_metadata(
                     namespace=namespace,
                     fileID=fileID,
                     chunk_count=len(chunks),
                     keywords=keywords,
                     summary=summary
                 )
+            else:
+                firebase_result = {
+                    'status': 'error',
+                    'message': 'Firebase nicht verfügbar'
+                }
             
             return {
                 "status": "success",
@@ -83,7 +90,7 @@ class DocProcessor:
                 "message": str(e)
             }
     
-    def _clean_text(self, text: str) -> Tuple[str, List[str], str]:
+    def _recondition_text(self, text: str) -> Tuple[str, List[str], str]:
         """
         Use OpenAI to clean the text and extract keywords/topics.
         
