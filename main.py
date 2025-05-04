@@ -9,6 +9,7 @@ from pinecone_connection import PineconeCon
 from chatbot import get_bot, message_bot
 from doc_processor import DocProcessor
 import tempfile
+from firebase_connection import FirebaseConnection
 
 load_dotenv()
 
@@ -69,9 +70,22 @@ async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), 
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
 @app.post("/delete")
-async def delete_file(file_name: str = Form(...), namespace: str = Form(...)):
-    con.delete_embeddings(file_name, namespace)
-    return {"status": "success", "message": f"File {file_name} deleted successfully"}
+async def delete_file(file_name: str = Form(...), namespace: str = Form(...), fileID: str = Form(...)):
+    try:
+        con.delete_embeddings(file_name, namespace)
+        
+        firebase = FirebaseConnection()
+        firebase_result = firebase.delete_document_metadata(namespace, fileID)
+        
+        return {
+            "status": "success", 
+            "message": f"File {file_name} deleted successfully",
+            "pinecone_status": "success",
+            "firebase_status": firebase_result["status"],
+            "firebase_message": firebase_result["message"]
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Error deleting file: {str(e)}"}
 
 
 @app.post("/query")
@@ -131,28 +145,52 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
 
 @app.post("/delete_all")
 async def delete_all_vectors(namespace: str = Form(...)):
-    result = con.delete_all(namespace)
-    if result["status"] == "error":
-        raise HTTPException(status_code=400, detail=result["message"])
-    return result
+    """
+    Delete all vectors from a namespace in Pinecone and all metadata from Firebase.
+    
+    Args:
+        namespace: Name of the namespace to clear
+    """
+    try:
+        result = con.delete_all(namespace)
+        
+        firebase = FirebaseConnection()
+        firebase_result = firebase.delete_namespace_metadata(namespace)
+        
+        return {
+            "status": "success", 
+            "message": f"All vectors in namespace {namespace} deleted successfully",
+            "pinecone_status": result["status"],
+            "pinecone_message": result["message"],
+            "firebase_status": firebase_result["status"],
+            "firebase_message": firebase_result["message"]
+        }
+    except Exception as e:
+        return {"status": "error", "message": f"Error deleting all vectors: {str(e)}"}
 
 
 @app.post("/delete_namespace")
 async def delete_namespace(namespace: str = Form(...)):
     """
-    Delete a namespace from the Pinecone index.
+    Delete a namespace from the Pinecone index and Firebase metadata.
     
     Args:
         namespace: Name of the namespace to delete
     """
     try:
-        
         pc = PineconeCon("userfiles")
-        
-        
         pc.delete_namespace(namespace)
         
-        return {"status": "success", "message": f"Namespace {namespace} deleted successfully"}
+        firebase = FirebaseConnection()
+        firebase_result = firebase.delete_namespace_metadata(namespace)
+        
+        return {
+            "status": "success", 
+            "message": f"Namespace {namespace} deleted successfully",
+            "pinecone_status": "success",
+            "firebase_status": firebase_result["status"],
+            "firebase_message": firebase_result["message"]
+        }
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

@@ -152,6 +152,79 @@ class FirebaseConnection:
                 'status': 'error',
                 'message': str(e)
             }
+            
+    def delete_document_metadata(self, namespace: str, fileID: str) -> Dict[str, Any]:
+        """
+        Löscht die Metadaten eines Dokuments aus Firebase.
+        
+        Args:
+            namespace: Der Namespace, in dem das Dokument gespeichert ist
+            fileID: Die ID des Dokuments
+            
+        Returns:
+            Dict mit Statusinformationen
+        """
+        try:
+            ref = self._db.reference(f'files/{namespace}/{fileID}')
+            
+            # Prüfen, ob das Dokument existiert
+            existing_data = ref.get()
+            if not existing_data:
+                return {
+                    'status': 'error',
+                    'message': f'Keine Metadaten für {fileID} gefunden'
+                }
+                
+            # Dokument löschen
+            ref.delete()
+            
+            return {
+                'status': 'success',
+                'message': f'Metadaten für {fileID} erfolgreich gelöscht',
+                'path': f'files/{namespace}/{fileID}'
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Fehler beim Löschen der Metadaten: {str(e)}'
+            }
+            
+    def delete_namespace_metadata(self, namespace: str) -> Dict[str, Any]:
+        """
+        Löscht alle Metadaten in einem Namespace aus Firebase.
+        
+        Args:
+            namespace: Der zu löschende Namespace
+            
+        Returns:
+            Dict mit Statusinformationen
+        """
+        try:
+            ref = self._db.reference(f'files/{namespace}')
+            
+            # Prüfen, ob der Namespace existiert
+            existing_data = ref.get()
+            if not existing_data:
+                return {
+                    'status': 'error',
+                    'message': f'Namespace {namespace} nicht gefunden'
+                }
+                
+            # Namespace löschen
+            ref.delete()
+            
+            return {
+                'status': 'success',
+                'message': f'Namespace {namespace} erfolgreich gelöscht',
+                'path': f'files/{namespace}'
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Fehler beim Löschen des Namespaces: {str(e)}'
+            }
 
 
 

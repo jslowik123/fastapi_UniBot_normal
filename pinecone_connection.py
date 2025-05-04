@@ -102,6 +102,29 @@ class PineconeCon:
             "vector_id": "dummy_vector_1",
             "dimension": dimension
         }
+        
+    def delete_all(self, namespace: str) -> Dict[str, Any]:
+        """
+        Löscht alle Vektoren in einem Namespace.
+        
+        Args:
+            namespace: Der Namespace, in dem alle Vektoren gelöscht werden sollen
+            
+        Returns:
+            Dict mit Statusinformationen
+        """
+        try:
+            self._index.delete(namespace=namespace, delete_all=True)
+            
+            return {
+                "status": "success",
+                "message": f"Alle Vektoren im Namespace '{namespace}' erfolgreich gelöscht"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Fehler beim Löschen aller Vektoren: {str(e)}"
+            }
 
 
 def delete_all():
@@ -109,5 +132,17 @@ def delete_all():
     api_key = os.getenv("PINECONE_API_KEY")
     pc = Pinecone(api_key=api_key)
     index = pc.Index("userfiles")
+    
+    try:
+        index.delete(delete_all=True)
+        return {
+            "status": "success",
+            "message": "Alle Vektoren im Index erfolgreich gelöscht"
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Fehler beim Löschen aller Vektoren: {str(e)}"
+        }
 
 
