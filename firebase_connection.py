@@ -62,16 +62,27 @@ class FirebaseConnection:
             # Pfad zum Dokument in der Datenbank
             ref = self._db.reference(f'files/{namespace}/{fileID}')
             
-            # Metadaten speichern
-            ref.set({
+            # Bestehende Daten abrufen
+            existing_data = ref.get() or {}
+            
+            # Neue Daten mit bestehenden Daten zusammenführen
+            existing_keywords = existing_data.get('keywords', [])
+            combined_keywords = list(set(existing_keywords + keywords))
+            
+            updated_data = {
                 'chunk_count': chunk_count,
-                'keywords': keywords,
+                'keywords': combined_keywords,
                 'summary': summary,
-            })
+            }
+            
+            # Nur aktualisieren, wenn ein Feld nicht bereits existiert oder einen neuen Wert hat
+            for key, value in updated_data.items():
+                if key not in existing_data or existing_data[key] != value:
+                    ref.child(key).set(value)
             
             return {
                 'status': 'success',
-                'message': f'Metadaten für {fileID} erfolgreich gespeichert',
+                'message': f'Metadaten für {fileID} erfolgreich aktualisiert',
                 'path': f'files/{namespace}/{fileID}'
             }
             
