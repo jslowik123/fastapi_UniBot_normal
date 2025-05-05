@@ -70,20 +70,31 @@ async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), 
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
 @app.post("/delete")
-async def delete_file(file_name: str = Form(...), namespace: str = Form(...), fileID: str = Form(...)):
+async def delete_file(file_name: str = Form(...), namespace: str = Form(...), fileID: str = Form(...), just_firebase: str = Form(...)):
     try:
-        con.delete_embeddings(file_name, namespace)
+        if just_firebase.lower() == "true":
+            con.delete_embeddings(file_name, namespace)
         
-        firebase = FirebaseConnection()
-        firebase_result = firebase.delete_document_metadata(namespace, fileID)
+            firebase = FirebaseConnection()
+            firebase_result = firebase.delete_document_metadata(namespace, fileID)
         
-        return {
+            return {
+                "status": "success", 
+                "message": f"File {file_name} deleted successfully",
+                "pinecone_status": "success",
+                "firebase_status": firebase_result["status"],
+                "firebase_message": firebase_result["message"]
+                }
+        else:
+            firebase = FirebaseConnection()
+            firebase_result = firebase.delete_document_metadata(namespace, fileID)
+        
+            return {
             "status": "success", 
             "message": f"File {file_name} deleted successfully",
-            "pinecone_status": "success",
             "firebase_status": firebase_result["status"],
             "firebase_message": firebase_result["message"]
-        }
+            }
     except Exception as e:
         return {"status": "error", "message": f"Error deleting file: {str(e)}"}
 
