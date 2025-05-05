@@ -99,14 +99,6 @@ async def delete_file(file_name: str = Form(...), namespace: str = Form(...), fi
         return {"status": "error", "message": f"Error deleting file: {str(e)}"}
 
 
-@app.post("/query")
-async def search_query(query: str = Form(...), namespace: str = Form(...)):
-    results = con.query(query, namespace=namespace)
-    return {
-        "status": "success",
-        "results": results
-    }
-    
 
 @app.post("/start_bot")
 async def start_bot():
@@ -120,8 +112,11 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     if not chat_state.chain:
         return {"status": "error", "message": "Bot not started. Please call /start_bot first"}
     
-    results = con.query(user_input, namespace=namespace)
-    knowledge = con.query(user_input, namespace="knowledge")
+    extracted_namespace_data = doc_processor.get_namespace_data(namespace)
+    appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
+
+    results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document, num_results=1)
+    # knowledge = con.query(user_input, namespace="knowledge")
 
     context = "\n".join([match["text"] for match in results])
     knowledge = "\n".join([match["text"] for match in knowledge])
@@ -154,30 +149,6 @@ async def create_namespace(namespace: str = Form(...), dimension: int = Form(153
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.post("/delete_all")
-async def delete_all_vectors(namespace: str = Form(...)):
-    """
-    Delete all vectors from a namespace in Pinecone and all metadata from Firebase.
-    
-    Args:
-        namespace: Name of the namespace to clear
-    """
-    try:
-        result = con.delete_all(namespace)
-        
-        firebase = FirebaseConnection()
-        firebase_result = firebase.delete_namespace_metadata(namespace)
-        
-        return {
-            "status": "success", 
-            "message": f"All vectors in namespace {namespace} deleted successfully",
-            "pinecone_status": result["status"],
-            "pinecone_message": result["message"],
-            "firebase_status": firebase_result["status"],
-            "firebase_message": firebase_result["message"]
-        }
-    except Exception as e:
-        return {"status": "error", "message": f"Error deleting all vectors: {str(e)}"}
 
 
 @app.post("/delete_namespace")

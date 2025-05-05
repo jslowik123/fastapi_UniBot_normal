@@ -24,12 +24,26 @@ class FirebaseConnection:
             credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
             
             if credentials_json:
-                # Aus JSON-String initialisieren
-                cred_dict = json.loads(credentials_json)
-                cred = credentials.Certificate(cred_dict)
-                firebase_admin.initialize_app(cred, {
-                    'databaseURL': database_url
-                })
+                try:
+                    # Aus JSON-String initialisieren
+                    cred_dict = json.loads(credentials_json)
+                    cred = credentials.Certificate(cred_dict)
+                    firebase_admin.initialize_app(cred, {
+                        'databaseURL': database_url
+                    })
+                except json.JSONDecodeError as e:
+                    print(f"Fehler beim Decodieren des JSON-Strings: {str(e)}")
+                    # Fallback: Versuche, die Credentials-Datei zu verwenden
+                    if credentials_path and os.path.exists(credentials_path):
+                        cred = credentials.Certificate(credentials_path)
+                        firebase_admin.initialize_app(cred, {
+                            'databaseURL': database_url
+                        })
+                    else:
+                        # Notfall-Fallback ohne Credentials
+                        firebase_admin.initialize_app(options={
+                            'databaseURL': database_url
+                        })
             elif credentials_path and os.path.exists(credentials_path):
                 # Aus Datei initialisieren
                 cred = credentials.Certificate(credentials_path)
@@ -226,5 +240,36 @@ class FirebaseConnection:
                 'message': f'Fehler beim Löschen des Namespaces: {str(e)}'
             }
 
-
+            
+    def get_namespace_data(self, namespace: str) -> Dict[str, Any]:
+        """
+        Ruft alle Daten eines bestimmten Namespaces aus der Firebase-Datenbank ab.
+        
+        Args:
+            namespace: Der Namespace, dessen Daten abgerufen werden sollen
+            
+        Returns:
+            Dict mit den Daten des Namespaces oder Fehlermeldung
+        """
+        try:
+            ref = self._db.reference(f'files/{namespace}')
+            data = ref.get()
+            
+            if data:
+                return {
+                    'status': 'success',
+                    'data': data
+                }
+            else:
+                return {
+                    'status': 'error',
+                    'data': {},
+                    'message': f'Keine Daten für Namespace {namespace} gefunden'
+                }
+                
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Fehler beim Abrufen der Daten für Namespace {namespace}: {str(e)}'
+            }
 

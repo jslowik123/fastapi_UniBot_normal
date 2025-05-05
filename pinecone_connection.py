@@ -51,7 +51,7 @@ class PineconeCon:
             filter={"file": file_name}
         )
 
-    def query(self, query: str, num_results: int = 3, namespace: str = "ns1") -> List[Dict[str, Any]]:
+    def query(self, query: str, namespace: str, num_results: int = 3) -> List[Dict[str, Any]]:
         response = self._openai.embeddings.create(
             model="text-embedding-3-small",
             input=query
@@ -74,6 +74,7 @@ class PineconeCon:
                     "score": match["score"],
                 })
         return numbered_results
+
 
     def delete_namespace(self, namespace: str = "ns1") -> None:
         self._index.delete(namespace=namespace, delete_all=True)
@@ -125,6 +126,49 @@ class PineconeCon:
                 "status": "error",
                 "message": f"Fehler beim Löschen aller Vektoren: {str(e)}"
             }
+
+    def query_by_id_prefix(self, query: str, namespace: str, id_prefix: str, num_results: int = 3) -> List[Dict[str, Any]]:
+        """
+        Führt eine Vektorsuche durch und filtert nach Vektoren, deren IDs mit dem gegebenen Präfix beginnen.
+        
+        Args:
+            query: Die Suchanfrage
+            namespace: Der Namespace, in dem gesucht werden soll
+            id_prefix: Das Präfix der Vektor-IDs, nach denen gefiltert werden soll
+            num_results: Anzahl der zurückzugebenden Ergebnisse
+            
+        Returns:
+            Liste mit den ähnlichsten Vektoren und deren Metadaten
+        """
+        response = self._openai.embeddings.create(
+            model="text-embedding-3-small",
+            input=query
+        )
+        embedding = response.data[0].embedding
+
+        # Filter für IDs mit dem gegebenen Präfix
+        id_filter = {"$startsWith": id_prefix}
+        
+        results = self._index.query(
+            namespace=namespace,
+            vector=embedding,
+            top_k=num_results,
+            include_values=False,
+            include_metadata=True,
+            filter={"id": id_filter}
+        )
+
+        numbered_results = []
+        for i, match in enumerate(results["matches"]):
+            if match["score"] >= 0.8:
+                numbered_results.append({
+                    "text": f"{i+1}. {match['metadata']['text']}",
+                    "score": match["score"],
+                    "file": match["metadata"].get("file", ""),
+                    "chunk_number": match["metadata"].get("chunk_number", 0),
+                    "id": match.get("id", "")
+                })
+        return numbered_results
 
 
 def delete_all():

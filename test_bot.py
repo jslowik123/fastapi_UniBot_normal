@@ -1,6 +1,10 @@
 import requests
 import os
 from dotenv import load_dotenv
+from firebase_connection import FirebaseConnection
+from openai import OpenAI
+import json
+from pinecone_connection import PineconeCon
 
 def test_bot():
     # Load environment variables
@@ -40,5 +44,28 @@ def test_bot():
     except Exception as e:
         print(f"Error: {str(e)}")
 
+def appropiate_document_search():
+    # Load environment variables
+    load_dotenv()
+    
+    # Setze die notwendigen Umgebungsvariablen, falls sie in .env fehlen
+    if not os.getenv('FIREBASE_DATABASE_URL'):
+        os.environ['FIREBASE_DATABASE_URL'] = "https://chatbot-17dbe-default-rtdb.europe-west1.firebasedatabase.app/"
+    
+    # Verwende den Pfad zur Credentials-Datei statt des JSON-Strings
+    if os.path.exists('firebase-credentials.json'):
+        os.environ['FIREBASE_CREDENTIALS_PATH'] = 'firebase-credentials.json'
+        
+    fb = FirebaseConnection()
+    openai = OpenAI()
+    # Namespace-spezifische Daten abrufen
+    namespace_data = fb.get_namespace_data("neuertest")
+    print("Namespace-Daten:", json.dumps(namespace_data, indent=2, ensure_ascii=False))
+    
+    if namespace_data['status'] == 'success' and 'data' in namespace_data:
+            for doc_id, doc_data in namespace_data['data'].items():
+                print(doc_id)
+
+                
 if __name__ == "__main__":
-    test_bot() 
+    appropiate_document_search() 

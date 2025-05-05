@@ -148,4 +148,47 @@ class DocProcessor:
             chunks.append(current_chunk.strip())
             
         return chunks
+    
+    def get_namespace_data(self, namespace: str) -> str:
+        namespace_data = self._firebase.get_namespace_data(namespace)
+        
+        extracted_data = []
+        if namespace_data['status'] == 'success' and 'data' in namespace_data:
+            for doc_id, doc_data in namespace_data['data'].items():
+            # Überspringe nicht-Dokument Einträge
+                if not isinstance(doc_data, dict) or 'keywords' not in doc_data:
+                    continue
+                
+            # Extrahiere die gewünschten Informationen
+                doc_info = {
+                    'id': doc_id,
+                'name': doc_data.get('name', 'Unbekannt'),
+                'keywords': doc_data.get('keywords', []),
+                    'summary': doc_data.get('summary', '')
+                }
+                extracted_data.append(doc_info)
+        return extracted_data
+
+    def appropiate_document_search(self, namespace: str, extracted_data: str, user_query: str) -> str:
+    
+
+        prompt = {
+                "role": "system", 
+                "content": "Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. Antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst."
+            }
+            
+        user_message = {
+                "role": "user",
+                "content": f"Hier sind die Themen der Dokumente:\n\n{extracted_data}. Bitte antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst. Die Frage des Users lautet: {user_query}"
+            }
+            
+        response = self._openai.chat.completions.create(
+                model="gpt-4.1-nano",
+                response_format={"type": "json_object"},
+                messages=[prompt, user_message],
+                temperature=0.3,
+            )
+            
+        response_content = response.choices[0].message.content
+        
 
