@@ -170,26 +170,32 @@ class DocProcessor:
                 extracted_data.append(doc_info)
         return extracted_data
 
-    def appropiate_document_search(self, namespace: str, extracted_data: str, user_query: str) -> str:
+    def appropiate_document_search(self, namespace: str, extracted_data: str, user_query: str) -> Dict:
     
 
         prompt = {
                 "role": "system", 
-                "content": "Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. Antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst, sowie die Anzahl der Chunks des Dokuments."
+                "content": "Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. Antworte im JSON-Format mit genau diesem Schema: {\"id\": \"document_id\"}. Verwende keine anderen Felder und füge keine Erklärungen hinzu."
             }
             
         user_message = {
                 "role": "user",
-                "content": f"Hier sind die Themen der Dokumente:\n\n{extracted_data}. Bitte antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst, sowie die Anzahl der Chunks des Dokuments. Die Frage des Users lautet: {user_query}"
+                "content": f"Hier sind die Themen der Dokumente:\n\n{extracted_data}. Bitte antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst. Die Frage des Users lautet: {user_query}"
             }
             
         response = self._openai.chat.completions.create(
                 model="gpt-4.1-nano",
                 response_format={"type": "json_object"},
                 messages=[prompt, user_message],
-                temperature=0.3,
+                temperature=0.1,  # Lower temperature for more predictable output
             )
             
-        return response.choices[0].message.content # format {"id": "123", "chunk_count": 10}
+        response_content = response.choices[0].message.content
+        try:
+            return json.loads(response_content)
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON: {e}")
+            print(f"Original content: {response_content}")
+            return {"id": extracted_data[0]["id"] if extracted_data else "default", "chunk_count": 5}
         
 

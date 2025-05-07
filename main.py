@@ -114,13 +114,31 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     
     try:
         extracted_namespace_data = doc_processor.get_namespace_data(namespace)
+        if not extracted_namespace_data:
+            return {"status": "error", "message": f"No documents found in namespace {namespace}"}
+            
         appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
+        
+        if not appropiate_document or "id" not in appropiate_document:
+            return {"status": "error", "message": "Could not find appropriate document for query"}
 
-        results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document["id"], chunk_count=appropiate_document["chunk_count"], num_results=1)
-        # knowledge_results = con.query(user_input, namespace="knowledge", fileID="knowledge", num_results=3)
-
-        context = "\n".join([match["text"] for match in results])
-        # knowledge = "\n".join([match["text"] for match in knowledge_results])
+        results = con.query(
+            query=user_input, 
+            namespace=namespace, 
+            fileID=appropiate_document["id"], 
+            num_results=3
+        )
+        
+        # Extract text from results
+        context_parts = []
+        for match in results.matches:
+            if hasattr(match, 'metadata') and 'text' in match.metadata:
+                context_parts.append(match.metadata['text'])
+        
+        if not context_parts:
+            return {"status": "error", "message": "No relevant content found for query"}
+            
+        context = "\n".join(context_parts)
         
         response = message_bot(user_input, context, "", chat_state.chat_history)
         
@@ -129,6 +147,7 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
         
         return {"status": "success", "response": response}
     except Exception as e:
+        print(f"Error in send_message: {str(e)}")
         return {"status": "error", "message": f"Error processing message: {str(e)}"}
 
 
