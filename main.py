@@ -112,21 +112,24 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     if not chat_state.chain:
         return {"status": "error", "message": "Bot not started. Please call /start_bot first"}
     
-    extracted_namespace_data = doc_processor.get_namespace_data(namespace)
-    appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
+    try:
+        extracted_namespace_data = doc_processor.get_namespace_data(namespace)
+        appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
 
-    results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document["id"], chunk_count=appropiate_document["chunk_count"], num_results=1)
-    # knowledge = con.query(user_input, namespace="knowledge")
+        results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document["id"], chunk_count=appropiate_document["chunk_count"], num_results=1)
+        # knowledge_results = con.query(user_input, namespace="knowledge", fileID="knowledge", num_results=3)
 
-    context = "\n".join([match["text"] for match in results])
-    knowledge = "\n".join([match["text"] for match in knowledge])
-    
-    response = message_bot(user_input, context, knowledge, chat_state.chat_history)
-    
-    chat_state.chat_history.append({"role": "user", "content": user_input})
-    chat_state.chat_history.append({"role": "assistant", "content": response})
-    
-    return {"status": "success", "response": response}
+        context = "\n".join([match["text"] for match in results])
+        # knowledge = "\n".join([match["text"] for match in knowledge_results])
+        
+        response = message_bot(user_input, context, "", chat_state.chat_history)
+        
+        chat_state.chat_history.append({"role": "user", "content": user_input})
+        chat_state.chat_history.append({"role": "assistant", "content": response})
+        
+        return {"status": "success", "response": response}
+    except Exception as e:
+        return {"status": "error", "message": f"Error processing message: {str(e)}"}
 
 
 @app.post("/create_namespace")

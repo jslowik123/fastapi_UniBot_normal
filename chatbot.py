@@ -53,7 +53,6 @@ Antworte klar, professionell und verständlich. Stelle Rückfragen, wenn die Nut
 
 def message_bot(user_input, context, knowledge, chat_history):
     try:
-        # Validate inputs
         if not user_input or not isinstance(user_input, str):
             return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
         
@@ -63,6 +62,17 @@ def message_bot(user_input, context, knowledge, chat_history):
         if not context or not isinstance(context, str):
             context = ""
 
+        if not knowledge or not isinstance(knowledge, str):
+            knowledge = ""
+
+        # Convert chat history format
+        formatted_history = []
+        for msg in chat_history:
+            if msg["role"] == "user":
+                formatted_history.append(HumanMessage(content=msg["content"]))
+            elif msg["role"] == "assistant":
+                formatted_history.append(AIMessage(content=msg["content"]))
+
         # Get bot instance
         chain = get_bot()
         
@@ -71,17 +81,13 @@ def message_bot(user_input, context, knowledge, chat_history):
             "input": user_input,
             "context": context,
             "knowledge": knowledge,
-            "chat_history": chat_history
+            "chat_history": formatted_history
         })
         
         # Validate response
         if not response or not hasattr(response, 'content'):
             return "Entschuldigung, ich konnte keine Antwort generieren."
             
-        # Update chat history with validated messages
-        chat_history.append(HumanMessage(content=user_input))
-        chat_history.append(AIMessage(content=response.content))
-        
         print("AI:" + response.content)
         return response.content
         
