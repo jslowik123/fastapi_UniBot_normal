@@ -5,7 +5,7 @@ from firebase_connection import FirebaseConnection
 from openai import OpenAI
 import json
 from pinecone_connection import PineconeCon
-
+from doc_processor import DocProcessor
 def test_bot():
     # Load environment variables
     load_dotenv()
@@ -45,27 +45,20 @@ def test_bot():
         print(f"Error: {str(e)}")
 
 def appropiate_document_search():
-    # Load environment variables
-    load_dotenv()
-    
-    # Setze die notwendigen Umgebungsvariablen, falls sie in .env fehlen
-    if not os.getenv('FIREBASE_DATABASE_URL'):
-        os.environ['FIREBASE_DATABASE_URL'] = "https://chatbot-17dbe-default-rtdb.europe-west1.firebasedatabase.app/"
-    
-    # Verwende den Pfad zur Credentials-Datei statt des JSON-Strings
-    if os.path.exists('firebase-credentials.json'):
-        os.environ['FIREBASE_CREDENTIALS_PATH'] = 'firebase-credentials.json'
-        
-    fb = FirebaseConnection()
-    openai = OpenAI()
-    # Namespace-spezifische Daten abrufen
-    namespace_data = fb.get_namespace_data("neuertest")
-    print("Namespace-Daten:", json.dumps(namespace_data, indent=2, ensure_ascii=False))
-    
-    if namespace_data['status'] == 'success' and 'data' in namespace_data:
-            for doc_id, doc_data in namespace_data['data'].items():
-                print(doc_id)
 
-                
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
+    openai_api_key = os.getenv("OPENAI_API_KEY")
+    doc = DocProcessor(pinecone_api_key, openai_api_key)
+    namespace_data = doc.get_namespace_data("neuertest")
+    print(namespace_data)
+    res = doc.appropiate_document_search(extracted_data=namespace_data, user_query="Was versteht man unter der Makroökonomie?", namespace="neuertest")
+    print(res)
+
+def query_by_id_prefix():
+    con = PineconeCon("userfiles")
+    results = con.query_by_id_prefix(query="Was versteht man unter der Makroökonomie?", id_prefix="-OPWqLaaM3Lsclxr-5fM", chunk_count=12, namespace="neuertest", num_results=1)
+    print(results)
+            
+
 if __name__ == "__main__":
-    appropiate_document_search() 
+    query_by_id_prefix() 

@@ -115,7 +115,7 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     extracted_namespace_data = doc_processor.get_namespace_data(namespace)
     appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
 
-    results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document, num_results=1)
+    results = con.query_by_id_prefix(user_input, namespace=namespace, id_prefix=appropiate_document["id"], chunk_count=appropiate_document["chunk_count"], num_results=1)
     # knowledge = con.query(user_input, namespace="knowledge")
 
     context = "\n".join([match["text"] for match in results])

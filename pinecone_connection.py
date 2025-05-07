@@ -29,9 +29,10 @@ class PineconeCon:
                 self._index.upsert(
                     namespace=namespace,
                     vectors=[{
-                        "id": f"{fileID}_{i}",
+                        "id": fileID,
                         "values": embedding,
                         "metadata": {
+                            "id": fileID,
                             "text": chunk,
                             "file": file_name,
                             "chunk_number": i
@@ -51,29 +52,35 @@ class PineconeCon:
             filter={"file": file_name}
         )
 
-    def query(self, query: str, namespace: str, num_results: int = 3) -> List[Dict[str, Any]]:
+    def query(self, query: str, namespace: str, fileID: str, chunk_count: int,  num_results: int = 3) -> List[Dict[str, Any]]:
         response = self._openai.embeddings.create(
             model="text-embedding-3-small",
             input=query
         )
         embedding = response.data[0].embedding
 
+
+        list_ids = [f"{fileID}_{i}" for i in range(chunk_count)]
+        print(list_ids)
+        filter={"file": "tmpc6i3re44.pdf"}
+
         results = self._index.query(
             namespace=namespace,
             vector=embedding,
             top_k=num_results,
             include_values=False,
-            include_metadata=True
+            include_metadata=True,
+            filter=filter
         )
 
         numbered_results = []
-        for i, match in enumerate(results["matches"]):
-            if match["score"] >= 0.8:
-                numbered_results.append({
-                    "text": f"{i+1}. {match['metadata']['text']}",
-                    "score": match["score"],
-                })
-        return numbered_results
+        # for i, match in enumerate(results["matches"]):
+        #     if match["score"] >= 0.8:
+        #         numbered_results.append({
+        #             "text": f"{i+1}. {match['metadata']['text']}",
+        #             "score": match["score"],
+        #         })
+        return results
 
 
     def delete_namespace(self, namespace: str = "ns1") -> None:
@@ -127,7 +134,7 @@ class PineconeCon:
                 "message": f"Fehler beim Löschen aller Vektoren: {str(e)}"
             }
 
-    def query_by_id_prefix(self, query: str, namespace: str, id_prefix: str, num_results: int = 3) -> List[Dict[str, Any]]:
+    def query_by_id_prefix(self, query: str, namespace: str, id_prefix: str, chunk_count: int, num_results: int = 3) -> List[Dict[str, Any]]:
         """
         Führt eine Vektorsuche durch und filtert nach Vektoren, deren IDs mit dem gegebenen Präfix beginnen.
         
@@ -146,21 +153,21 @@ class PineconeCon:
         )
         embedding = response.data[0].embedding
 
-        # Filter für IDs mit dem gegebenen Präfix
-        id_filter = {"$startsWith": id_prefix}
-        
+        list_ids = [f"{id_prefix}_{i}" for i in range(chunk_count)]
+        print(list_ids)
+        filter={"id": {"$in": list_ids}}
         results = self._index.query(
             namespace=namespace,
             vector=embedding,
             top_k=num_results,
             include_values=False,
             include_metadata=True,
-            filter={"id": id_filter}
+            filter=filter
         )
-
+        print(results)
         numbered_results = []
         for i, match in enumerate(results["matches"]):
-            if match["score"] >= 0.8:
+            # if match["score"] >= 0.5:
                 numbered_results.append({
                     "text": f"{i+1}. {match['metadata']['text']}",
                     "score": match["score"],
@@ -190,3 +197,14 @@ def delete_all():
         }
 
 
+def test_query():
+    load_dotenv(dotenv_path=".env")
+    api_key = os.getenv("PINECONE_API_KEY")
+    pc = Pinecone(api_key=api_key)
+    index = pc.Index("userfiles")
+    pc = PineconeCon("userfiles")
+    results = pc.query(query="Was versteht man unter der Makroökonomie?", namespace="neuertest", fileID="-OPWqLaaM3Lsclxr-5fM", chunk_count=12, num_results=3)
+    print(results)
+
+if __name__ == "__main__":
+    test_query()

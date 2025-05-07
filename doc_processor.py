@@ -162,9 +162,10 @@ class DocProcessor:
             # Extrahiere die gewünschten Informationen
                 doc_info = {
                     'id': doc_id,
-                'name': doc_data.get('name', 'Unbekannt'),
-                'keywords': doc_data.get('keywords', []),
-                    'summary': doc_data.get('summary', '')
+                    'name': doc_data.get('name', 'Unbekannt'),
+                    'keywords': doc_data.get('keywords', []),
+                    'summary': doc_data.get('summary', ''),
+                    'chunk_count': doc_data.get('chunk_count', 0)
                 }
                 extracted_data.append(doc_info)
         return extracted_data
@@ -174,12 +175,12 @@ class DocProcessor:
 
         prompt = {
                 "role": "system", 
-                "content": "Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. Antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst."
+                "content": "Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. Antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst, sowie die Anzahl der Chunks des Dokuments."
             }
             
         user_message = {
                 "role": "user",
-                "content": f"Hier sind die Themen der Dokumente:\n\n{extracted_data}. Bitte antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst. Die Frage des Users lautet: {user_query}"
+                "content": f"Hier sind die Themen der Dokumente:\n\n{extracted_data}. Bitte antworte im JSON-Format, indem du nur die ID des geeigneten Dokuments zurückgibst, sowie die Anzahl der Chunks des Dokuments. Die Frage des Users lautet: {user_query}"
             }
             
         response = self._openai.chat.completions.create(
@@ -189,6 +190,6 @@ class DocProcessor:
                 temperature=0.3,
             )
             
-        response_content = response.choices[0].message.content
+        return response.choices[0].message.content # format {"id": "123", "chunk_count": 10}
         
 
