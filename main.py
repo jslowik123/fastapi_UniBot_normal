@@ -11,6 +11,7 @@ from doc_processor import DocProcessor
 import tempfile
 from firebase_connection import FirebaseConnection
 from celery_app import test_task, celery
+from tasks import process_document
 
 load_dotenv()
 
@@ -54,19 +55,19 @@ async def root():
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...)):
     try:
-        
         with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
 
+        task = process_document.delay(temp_file_path, namespace, fileID)
         
-        result = doc_processor.process_pdf(temp_file_path, namespace, fileID)
-        
-        
-        os.unlink(temp_file_path)
-        
-        return result
+        return {
+            "status": "success",
+            "message": "File upload started",
+            "task_id": task.id,
+            "filename": file.filename
+        }
     except Exception as e:
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
