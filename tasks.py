@@ -24,32 +24,67 @@ def process_file(job_id: str):
 @celery.task(bind=True, name="tasks.process_document")
 def process_document(self, file_path: str, namespace: str, fileID: str):
     try:
-        self.update_state(state='PROCESSING', meta={
-            'status': 'Processing document',
-            'current': 0,
-            'total': 100,
-            'file': file_path
-        })
+        # Initial state
+        self.update_state(
+            state='STARTED',
+            meta={
+                'status': 'Starting document processing',
+                'current': 0,
+                'total': 100,
+                'file': file_path
+            }
+        )
+        
+        # Update progress - 25%
+        self.update_state(
+            state='PROCESSING',
+            meta={
+                'status': 'Reading document',
+                'current': 25,
+                'total': 100,
+                'file': file_path
+            }
+        )
         
         result = doc_processor.process_pdf(file_path, namespace, fileID)
         
+        # Update progress - 75%
+        self.update_state(
+            state='PROCESSING',
+            meta={
+                'status': 'Finalizing processing',
+                'current': 75,
+                'total': 100,
+                'file': file_path
+            }
+        )
+        
         if result['status'] == 'success':
+            # Final success state
             return {
-                'status': result['status'],
+                'status': 'success',
                 'message': result['message'],
                 'chunks': result.get('chunks', 0),
                 'pinecone_result': result.get('pinecone_result', {}),
                 'firebase_result': result.get('firebase_result', {}),
-                'file': file_path
+                'file': file_path,
+                'current': 100,
+                'total': 100
             }
         else:
             raise Exception(result['message'])
             
     except Exception as e:
-        self.update_state(state='FAILURE', meta={
-            'error': str(e),
-            'file': file_path
-        })
+        self.update_state(
+            state='FAILURE',
+            meta={
+                'status': 'Failed',
+                'error': str(e),
+                'file': file_path,
+                'current': 0,
+                'total': 100
+            }
+        )
         raise
     finally:
         if os.path.exists(file_path):

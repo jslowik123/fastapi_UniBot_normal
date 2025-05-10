@@ -214,6 +214,9 @@ async def test_worker():
 async def get_task_status(task_id: str):
     try:
         task = celery.AsyncResult(task_id)
+        print(f"Task state: {task.state}")  # Debug log
+        print(f"Task info: {task.info}")    # Debug log
+        print(f"Task result: {task.result}") # Debug log
         
         if task.state == 'PENDING':
             response = {
@@ -221,28 +224,29 @@ async def get_task_status(task_id: str):
                 'status': 'Task is waiting for execution',
                 'progress': 0
             }
-        elif task.state == 'PROCESSING':
+        elif task.state == 'STARTED' or task.state == 'PROCESSING':
+            meta = task.info or {}
             response = {
                 'state': task.state,
-                'status': task.info.get('status', ''),
-                'current': task.info.get('current', 0),
-                'total': task.info.get('total', 1),
-                'progress': int((task.info.get('current', 0) / task.info.get('total', 1)) * 100),
-                'file': task.info.get('file', '')
+                'status': meta.get('status', 'Processing'),
+                'current': meta.get('current', 0),
+                'total': meta.get('total', 100),
+                'progress': meta.get('current', 0),
+                'file': meta.get('file', '')
             }
-        elif task.state == 'FAILURE':
+        elif task.state == 'FAILURE' or task.state == 'REVOKED':
+            error = str(task.result) if task.result else str(task.info) if task.info else 'Unknown error occurred'
             response = {
                 'state': task.state,
                 'status': 'Failed',
-                'error': str(task.result) if task.result else 'Unknown error occurred',
+                'error': error,
                 'progress': 0
             }
         elif task.state == 'SUCCESS':
-            if task.result is None:
+            if not task.result:
                 response = {
                     'state': task.state,
-                    'status': 'Completed',
-                    'result': None,
+                    'status': 'Completed but no result',
                     'progress': 100
                 }
             else:
@@ -255,12 +259,16 @@ async def get_task_status(task_id: str):
         else:
             response = {
                 'state': task.state,
-                'status': str(task.info) if task.info else 'Unknown state',
+                'status': f'Unknown state: {task.state}',
+                'info': str(task.info) if task.info else 'No info available',
                 'progress': 0
             }
         
+        print(f"Sending response: {response}")  # Debug log
         return response
+        
     except Exception as e:
+        print(f"Error in task status: {str(e)}")  # Debug log
         return {
             'state': 'ERROR',
             'status': 'Error checking task status',
