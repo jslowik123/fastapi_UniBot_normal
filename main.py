@@ -12,6 +12,9 @@ import tempfile
 from firebase_connection import FirebaseConnection
 from celery_app import test_task, celery
 from tasks import process_document
+from redis import Redis
+import time
+from celery.exceptions import Ignore
 
 load_dotenv()
 
@@ -210,21 +213,37 @@ async def test_worker():
 @app.get("/task_status/{task_id}")
 async def get_task_status(task_id: str):
     task = celery.AsyncResult(task_id)
+    
     if task.state == 'PENDING':
         response = {
             'state': task.state,
-            'status': 'Task is waiting for execution or unknown'
+            'status': 'Task is waiting for execution',
+            'progress': 0
+        }
+    elif task.state == 'PROCESSING':
+        response = {
+            'state': task.state,
+            'status': task.info.get('status', ''),
+            'current': task.info.get('current', 0),
+            'total': task.info.get('total', 1),
+            'progress': int((task.info.get('current', 0) / task.info.get('total', 1)) * 100),
+            'file': task.info.get('file', '')
         }
     elif task.state == 'FAILURE':
         response = {
             'state': task.state,
-            'status': str(task.info)
+            'status': 'Failed',
+            'error': str(task.info.get('error', 'Unknown error occurred')),
+            'progress': 0
         }
     else:
         response = {
             'state': task.state,
-            'status': task.info
+            'status': task.info.get('status', 'Complete'),
+            'result': task.info,
+            'progress': 100
         }
+    
     return response
 
 
