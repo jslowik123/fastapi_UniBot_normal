@@ -213,7 +213,6 @@ async def test_worker():
 @app.get("/task_status/{task_id}")
 async def get_task_status(task_id: str):
     task = celery.AsyncResult(task_id)
-    
     if task.state == 'PENDING':
         response = {
             'state': task.state,
