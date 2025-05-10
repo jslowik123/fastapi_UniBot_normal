@@ -212,38 +212,61 @@ async def test_worker():
 
 @app.get("/task_status/{task_id}")
 async def get_task_status(task_id: str):
-    task = celery.AsyncResult(task_id)
-    if task.state == 'PENDING':
-        response = {
-            'state': task.state,
-            'status': 'Task is waiting for execution',
+    try:
+        task = celery.AsyncResult(task_id)
+        
+        if task.state == 'PENDING':
+            response = {
+                'state': task.state,
+                'status': 'Task is waiting for execution',
+                'progress': 0
+            }
+        elif task.state == 'PROCESSING':
+            response = {
+                'state': task.state,
+                'status': task.info.get('status', ''),
+                'current': task.info.get('current', 0),
+                'total': task.info.get('total', 1),
+                'progress': int((task.info.get('current', 0) / task.info.get('total', 1)) * 100),
+                'file': task.info.get('file', '')
+            }
+        elif task.state == 'FAILURE':
+            response = {
+                'state': task.state,
+                'status': 'Failed',
+                'error': str(task.result) if task.result else 'Unknown error occurred',
+                'progress': 0
+            }
+        elif task.state == 'SUCCESS':
+            if task.result is None:
+                response = {
+                    'state': task.state,
+                    'status': 'Completed',
+                    'result': None,
+                    'progress': 100
+                }
+            else:
+                response = {
+                    'state': task.state,
+                    'status': 'Completed',
+                    'result': task.result,
+                    'progress': 100
+                }
+        else:
+            response = {
+                'state': task.state,
+                'status': str(task.info) if task.info else 'Unknown state',
+                'progress': 0
+            }
+        
+        return response
+    except Exception as e:
+        return {
+            'state': 'ERROR',
+            'status': 'Error checking task status',
+            'error': str(e),
             'progress': 0
         }
-    elif task.state == 'PROCESSING':
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', ''),
-            'current': task.info.get('current', 0),
-            'total': task.info.get('total', 1),
-            'progress': int((task.info.get('current', 0) / task.info.get('total', 1)) * 100),
-            'file': task.info.get('file', '')
-        }
-    elif task.state == 'FAILURE':
-        response = {
-            'state': task.state,
-            'status': 'Failed',
-            'error': str(task.info.get('error', 'Unknown error occurred')),
-            'progress': 0
-        }
-    else:
-        response = {
-            'state': task.state,
-            'status': task.info.get('status', 'Complete'),
-            'result': task.info,
-            'progress': 100
-        }
-    
-    return response
 
 
 if __name__ == "__main__":
