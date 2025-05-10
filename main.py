@@ -10,6 +10,7 @@ from chatbot import get_bot, message_bot
 from doc_processor import DocProcessor
 import tempfile
 from firebase_connection import FirebaseConnection
+from celery_app import test_task, celery
 
 load_dotenv()
 
@@ -197,6 +198,33 @@ async def delete_namespace(namespace: str = Form(...)):
         }
     except Exception as e:
         return {"status": "error", "message": str(e)}
+
+
+@app.get("/test_worker")
+async def test_worker():
+    result = test_task.delay()
+    return {"status": "success", "task_id": result.id, "message": "Test task sent to worker"}
+
+
+@app.get("/task_status/{task_id}")
+async def get_task_status(task_id: str):
+    task = celery.AsyncResult(task_id)
+    if task.state == 'PENDING':
+        response = {
+            'state': task.state,
+            'status': 'Task is waiting for execution or unknown'
+        }
+    elif task.state == 'FAILURE':
+        response = {
+            'state': task.state,
+            'status': str(task.info)
+        }
+    else:
+        response = {
+            'state': task.state,
+            'status': task.info
+        }
+    return response
 
 
 if __name__ == "__main__":
