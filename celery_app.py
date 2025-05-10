@@ -22,7 +22,8 @@ celery.conf.update(
         'ssl_certfile': None,
         'ssl_keyfile': None,
         'ssl_check_hostname': False
-    }
+    },
+    broker_connection_retry_on_startup=True
 )
 
 @celery.task
