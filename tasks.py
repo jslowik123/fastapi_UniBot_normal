@@ -24,7 +24,6 @@ def process_file(job_id: str):
 @celery.task(bind=True, name="tasks.process_document")
 def process_document(self, file_path: str, namespace: str, fileID: str):
     try:
-        # Initial state
         self.update_state(
             state='STARTED',
             meta={
@@ -35,7 +34,6 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
             }
         )
         
-        # Update progress - 25%
         self.update_state(
             state='PROCESSING',
             meta={
@@ -48,7 +46,6 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
         
         result = doc_processor.process_pdf(file_path, namespace, fileID)
         
-        # Update progress - 75%
         self.update_state(
             state='PROCESSING',
             meta={
@@ -60,7 +57,6 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
         )
         
         if result['status'] == 'success':
-            # Final success state
             return {
                 'status': 'success',
                 'message': result['message'],
@@ -72,20 +68,22 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
                 'total': 100
             }
         else:
-            raise Exception(result['message'])
+            raise Exception(f"Processing failed: {result['message']}")
             
     except Exception as e:
         self.update_state(
             state='FAILURE',
             meta={
+                'exc_type': type(e).__name__,
+                'exc_message': str(e),
                 'status': 'Failed',
-                'error': str(e),
+                'error': f"{type(e).__name__}: {str(e)}",
                 'file': file_path,
                 'current': 0,
                 'total': 100
             }
         )
-        raise
+        raise e
     finally:
         if os.path.exists(file_path):
             os.unlink(file_path)

@@ -237,14 +237,19 @@ async def get_task_status(task_id: str):
                 'file': meta.get('file', '')
             }
         elif task.state == 'FAILURE' or task.state == 'REVOKED':
-            error = str(task.result) if task.result else str(task.info) if task.info else 'Unknown error occurred'
+            meta = task.info or {}
+            error_info = {
+                'type': meta.get('exc_type', 'Unknown'),
+                'message': meta.get('exc_message', str(task.result)),
+                'details': meta.get('error', 'No additional details available')
+            }
             raise HTTPException(
                 status_code=500,
                 detail={
                     'state': task.state,
                     'status': 'FAILURE',
-                    'message': 'Failed',
-                    'error': error,
+                    'message': 'Task processing failed',
+                    'error': error_info,
                     'progress': 0
                 }
             )
@@ -281,7 +286,11 @@ async def get_task_status(task_id: str):
             'state': 'ERROR',
             'status': 'ERROR',
             'message': 'Error checking task status',
-            'error': f"{type(e).__name__}: {str(e)}",
+            'error': {
+                'type': type(e).__name__,
+                'message': str(e),
+                'details': 'Error occurred while checking task status'
+            },
             'progress': 0
         }
         raise HTTPException(status_code=500, detail=error_detail)
