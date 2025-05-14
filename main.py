@@ -58,10 +58,16 @@ async def root():
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...)):
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        # Create a directory for temporary files if it doesn't exist
+        temp_dir = os.path.join(os.getcwd(), "temp_uploads")
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        # Create a temporary file with a unique name in our controlled directory
+        temp_file_path = os.path.join(temp_dir, f"{fileID}_{file.filename}")
+        
+        with open(temp_file_path, "wb") as temp_file:
             content = await file.read()
             temp_file.write(content)
-            temp_file_path = temp_file.name
 
         task = process_document.delay(temp_file_path, namespace, fileID)
         
@@ -72,6 +78,9 @@ async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), 
             "filename": file.filename
         }
     except Exception as e:
+        # Clean up the file if task creation fails
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
         return {"status": "error", "message": f"Error processing file: {str(e)}", "filename": file.filename}
 
 @app.post("/delete")

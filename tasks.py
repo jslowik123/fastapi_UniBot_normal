@@ -24,6 +24,9 @@ def process_file(job_id: str):
 @celery.task(bind=True, name="tasks.process_document")
 def process_document(self, file_path: str, namespace: str, fileID: str):
     try:
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"The uploaded file {file_path} was not found")
+
         self.update_state(
             state='STARTED',
             meta={
@@ -85,5 +88,8 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
         )
         raise e
     finally:
-        if os.path.exists(file_path):
-            os.unlink(file_path)
+        try:
+            if os.path.exists(file_path):
+                os.unlink(file_path)
+        except Exception as cleanup_error:
+            print(f"Warning: Could not delete temporary file {file_path}: {cleanup_error}")
