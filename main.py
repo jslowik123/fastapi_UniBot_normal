@@ -214,21 +214,23 @@ async def test_worker():
 async def get_task_status(task_id: str):
     try:
         task = celery.AsyncResult(task_id)
-        print(f"Task state: {task.state}")  # Debug log
-        print(f"Task info: {task.info}")    # Debug log
-        print(f"Task result: {task.result}") # Debug log
+        print(f"Task state: {task.state}")
+        print(f"Task info: {task.info}")
+        print(f"Task result: {task.result}")
         
         if task.state == 'PENDING':
             response = {
                 'state': task.state,
-                'status': 'Task is waiting for execution',
+                'status': 'PENDING',
+                'message': 'Task is waiting for execution',
                 'progress': 0
             }
         elif task.state == 'STARTED' or task.state == 'PROCESSING':
             meta = task.info or {}
             response = {
                 'state': task.state,
-                'status': meta.get('status', 'Processing'),
+                'status': 'PROCESSING',
+                'message': meta.get('status', 'Processing'),
                 'current': meta.get('current', 0),
                 'total': meta.get('total', 100),
                 'progress': meta.get('current', 0),
@@ -236,45 +238,53 @@ async def get_task_status(task_id: str):
             }
         elif task.state == 'FAILURE' or task.state == 'REVOKED':
             error = str(task.result) if task.result else str(task.info) if task.info else 'Unknown error occurred'
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    'state': task.state,
+                    'status': 'FAILURE',
+                    'message': 'Failed',
+                    'error': error,
+                    'progress': 0
+                }
+            )
+        elif task.state == 'SUCCESS':
+            result = task.result if isinstance(task.result, dict) else {}
             response = {
                 'state': task.state,
-                'status': 'Failed',
-                'error': error,
-                'progress': 0
+                'status': 'SUCCESS',
+                'message': 'Completed successfully',
+                'progress': 100,
+                'result': {
+                    'message': result.get('message', 'Task completed'),
+                    'chunks': result.get('chunks', 0),
+                    'pinecone_status': result.get('pinecone_result', {}).get('status', 'unknown'),
+                    'firebase_status': result.get('firebase_result', {}).get('status', 'unknown'),
+                    'file': result.get('file', '')
+                }
             }
-        elif task.state == 'SUCCESS':
-            if not task.result:
-                response = {
-                    'state': task.state,
-                    'status': 'Completed but no result',
-                    'progress': 100
-                }
-            else:
-                response = {
-                    'state': task.state,
-                    'status': 'Completed',
-                    'result': task.result,
-                    'progress': 100
-                }
         else:
             response = {
                 'state': task.state,
-                'status': f'Unknown state: {task.state}',
+                'status': 'UNKNOWN',
+                'message': f'Unknown state: {task.state}',
                 'info': str(task.info) if task.info else 'No info available',
                 'progress': 0
             }
         
-        print(f"Sending response: {response}")  # Debug log
+        print(f"Sending response: {response}")
         return response
         
     except Exception as e:
-        print(f"Error in task status: {str(e)}")  # Debug log
-        return {
+        print(f"Error in task status: {str(e)}")
+        error_detail = {
             'state': 'ERROR',
-            'status': 'Error checking task status',
-            'error': str(e),
+            'status': 'ERROR',
+            'message': 'Error checking task status',
+            'error': f"{type(e).__name__}: {str(e)}",
             'progress': 0
         }
+        raise HTTPException(status_code=500, detail=error_detail)
 
 
 if __name__ == "__main__":

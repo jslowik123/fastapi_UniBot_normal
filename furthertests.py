@@ -1,14 +1,6 @@
-from openai import OpenAI
-client = OpenAI()
+import os
 
-completion = client.chat.completions.create(
-    model="gpt-4.1",
-    messages=[
-        {
-            "role": "user",
-            "content": "Expand this query: 'Zulassungsvoraussetzungen für BWL'"
-        }
-    ]
-)
-
-print(completion.choices[0].message.content)  
+redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+from redis import Redis
+r = Redis.from_url(redis_url, ssl_cert_reqs=None)
+r.ping()  # Should return True
