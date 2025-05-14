@@ -22,18 +22,18 @@ def process_file(job_id: str):
     r.set(f"job:{job_id}", "done")
 
 @celery.task(bind=True, name="tasks.process_document")
-def process_document(self, file_path: str, namespace: str, fileID: str):
+def process_document(self, file_content: bytes, namespace: str, fileID: str, filename: str):
     try:
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"The uploaded file {file_path} was not found")
-
+        import io
+        from PyPDF2 import PdfReader
+        
         self.update_state(
             state='STARTED',
             meta={
                 'status': 'Starting document processing',
                 'current': 0,
                 'total': 100,
-                'file': file_path
+                'file': filename
             }
         )
         
@@ -43,11 +43,12 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
                 'status': 'Reading document',
                 'current': 25,
                 'total': 100,
-                'file': file_path
+                'file': filename
             }
         )
         
-        result = doc_processor.process_pdf(file_path, namespace, fileID)
+        pdf_file = io.BytesIO(file_content)
+        result = doc_processor.process_pdf_bytes(pdf_file, namespace, fileID, filename)
         
         self.update_state(
             state='PROCESSING',
@@ -55,7 +56,7 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
                 'status': 'Finalizing processing',
                 'current': 75,
                 'total': 100,
-                'file': file_path
+                'file': filename
             }
         )
         
@@ -66,7 +67,7 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
                 'chunks': result.get('chunks', 0),
                 'pinecone_result': result.get('pinecone_result', {}),
                 'firebase_result': result.get('firebase_result', {}),
-                'file': file_path,
+                'file': filename,
                 'current': 100,
                 'total': 100
             }
@@ -81,15 +82,9 @@ def process_document(self, file_path: str, namespace: str, fileID: str):
                 'exc_message': str(e),
                 'status': 'Failed',
                 'error': f"{type(e).__name__}: {str(e)}",
-                'file': file_path,
+                'file': filename,
                 'current': 0,
                 'total': 100
             }
         )
         raise e
-    finally:
-        try:
-            if os.path.exists(file_path):
-                os.unlink(file_path)
-        except Exception as cleanup_error:
-            print(f"Warning: Could not delete temporary file {file_path}: {cleanup_error}")

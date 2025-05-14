@@ -90,6 +90,49 @@ class DocProcessor:
                 "message": str(e)
             }
     
+    def process_pdf_bytes(self, pdf_file, namespace: str, fileID: str, file_name: str) -> Dict[str, Any]:
+        try:
+            pdf_reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in pdf_reader.pages:
+                text += page.extract_text()
+
+            cleaned_text, keywords, summary = self._recondition_text(text)
+            
+            chunks = self._split_text(cleaned_text)
+            
+            pinecone_result = self._con.upload(chunks, namespace, file_name, fileID=fileID)
+
+            firebase_result = None
+            if self._firebase_available:
+                firebase_result = self._firebase.append_metadata(
+                    namespace=namespace,
+                    fileID=fileID,
+                    chunk_count=len(chunks),
+                    keywords=keywords,
+                    summary=summary
+                )
+            else:
+                firebase_result = {
+                    'status': 'error',
+                    'message': 'Firebase nicht verfügbar'
+                }
+            
+            return {
+                "status": "success",
+                "message": f"File {file_name} processed successfully",
+                "chunks": len(chunks),
+                "pinecone_result": pinecone_result,
+                "firebase_result": firebase_result,
+                "original_file": file_name
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+    
     def _recondition_text(self, text: str) -> Tuple[str, List[str], str]:
         """
         Use OpenAI to clean the text and extract keywords/topics.
