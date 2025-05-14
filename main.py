@@ -226,7 +226,7 @@ async def get_task_status(task_id: str):
                 'progress': 0
             }
         elif task.state == 'STARTED' or task.state == 'PROCESSING':
-            meta = task.info or {}
+            meta = task.info if isinstance(task.info, dict) else {}
             response = {
                 'state': task.state,
                 'status': 'PROCESSING',
@@ -237,12 +237,21 @@ async def get_task_status(task_id: str):
                 'file': meta.get('file', '')
             }
         elif task.state == 'FAILURE' or task.state == 'REVOKED':
-            meta = task.info or {}
-            error_info = {
-                'type': meta.get('exc_type', 'Unknown'),
-                'message': meta.get('exc_message', str(task.result)),
-                'details': meta.get('error', 'No additional details available')
-            }
+            # Handle the case where task.info might be an Exception
+            if isinstance(task.info, Exception):
+                error_info = {
+                    'type': type(task.info).__name__,
+                    'message': str(task.info),
+                    'details': 'Task failed with an exception'
+                }
+            else:
+                meta = task.info if isinstance(task.info, dict) else {}
+                error_info = {
+                    'type': meta.get('exc_type', type(task.result).__name__ if task.result else 'Unknown'),
+                    'message': meta.get('exc_message', str(task.result) if task.result else 'Unknown error'),
+                    'details': meta.get('error', 'No additional details available')
+                }
+            
             raise HTTPException(
                 status_code=500,
                 detail={
@@ -254,20 +263,38 @@ async def get_task_status(task_id: str):
                 }
             )
         elif task.state == 'SUCCESS':
+            # For completed tasks, we should look at task.result
             result = task.result if isinstance(task.result, dict) else {}
-            response = {
-                'state': task.state,
-                'status': 'SUCCESS',
-                'message': 'Completed successfully',
-                'progress': 100,
-                'result': {
-                    'message': result.get('message', 'Task completed'),
-                    'chunks': result.get('chunks', 0),
-                    'pinecone_status': result.get('pinecone_result', {}).get('status', 'unknown'),
-                    'firebase_status': result.get('firebase_result', {}).get('status', 'unknown'),
-                    'file': result.get('file', '')
+            
+            # Check if we have a valid result
+            if not result:
+                response = {
+                    'state': task.state,
+                    'status': 'SUCCESS',
+                    'message': 'Task completed but no result available',
+                    'progress': 100,
+                    'result': {
+                        'message': 'No result data available',
+                        'chunks': 0,
+                        'pinecone_status': 'unknown',
+                        'firebase_status': 'unknown',
+                        'file': ''
+                    }
                 }
-            }
+            else:
+                response = {
+                    'state': task.state,
+                    'status': 'SUCCESS',
+                    'message': 'Completed successfully',
+                    'progress': 100,
+                    'result': {
+                        'message': result.get('message', 'Task completed'),
+                        'chunks': result.get('chunks', 0),
+                        'pinecone_status': result.get('pinecone_result', {}).get('status', 'unknown'),
+                        'firebase_status': result.get('firebase_result', {}).get('status', 'unknown'),
+                        'file': result.get('file', '')
+                    }
+                }
         else:
             response = {
                 'state': task.state,
