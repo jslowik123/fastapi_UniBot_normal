@@ -273,3 +273,37 @@ class FirebaseConnection:
                 'message': f'Fehler beim Abrufen der Daten für Namespace {namespace}: {str(e)}'
             }
 
+    def update_document_status(self, namespace: str, fileID: str, status_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Updates the processing status of a document in Firebase.
+        
+        Args:
+            namespace: The namespace where the document is stored
+            fileID: The ID of the document
+            status_data: Dictionary containing status information (processing, progress, status)
+            
+        Returns:
+            Dict with status information
+        """
+        try:
+            ref = self._db.reference(f'files/{namespace}/{fileID}')
+            
+            existing_data = ref.get() or {}
+            
+            for key, value in status_data.items():
+                existing_data[key] = value
+                
+            ref.update(existing_data)
+            
+            return {
+                'status': 'success',
+                'message': f'Status for {fileID} successfully updated',
+                'path': f'files/{namespace}/{fileID}'
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error updating document status: {str(e)}'
+            }
+

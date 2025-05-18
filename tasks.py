@@ -27,6 +27,13 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
         import io
         from PyPDF2 import PdfReader
         
+        if doc_processor._firebase_available:
+            doc_processor._firebase.update_document_status(namespace, fileID, {
+                'processing': True,
+                'progress': 0,
+                'status': 'Starting document processing'
+            })
+        
         self.update_state(
             state='STARTED',
             meta={
@@ -36,6 +43,12 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
                 'file': filename
             }
         )
+        
+        if doc_processor._firebase_available:
+            doc_processor._firebase.update_document_status(namespace, fileID, {
+                'progress': 25,
+                'status': 'Reading document'
+            })
         
         self.update_state(
             state='PROCESSING',
@@ -50,6 +63,12 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
         pdf_file = io.BytesIO(file_content)
         result = doc_processor.process_pdf_bytes(pdf_file, namespace, fileID, filename)
         
+        if doc_processor._firebase_available:
+            doc_processor._firebase.update_document_status(namespace, fileID, {
+                'progress': 75,
+                'status': 'Finalizing processing'
+            })
+        
         self.update_state(
             state='PROCESSING',
             meta={
@@ -61,6 +80,12 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
         )
         
         if result['status'] == 'success':
+            if doc_processor._firebase_available:
+                doc_processor._firebase.update_document_status(namespace, fileID, {
+                    'processing': False,
+                    'progress': 100,
+                    'status': 'Complete'
+                })
             return {
                 'status': 'success',
                 'message': result['message'],
@@ -72,9 +97,22 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
                 'total': 100
             }
         else:
+            if doc_processor._firebase_available:
+                doc_processor._firebase.update_document_status(namespace, fileID, {
+                    'processing': False,
+                    'progress': 0,
+                    'status': f"Processing failed: {result['message']}"
+                })
             raise Exception(f"Processing failed: {result['message']}")
             
     except Exception as e:
+        if doc_processor._firebase_available:
+            doc_processor._firebase.update_document_status(namespace, fileID, {
+                'processing': False,
+                'progress': 0,
+                'status': f"Failed: {str(e)}"
+            })
+        
         self.update_state(
             state='FAILURE',
             meta={
