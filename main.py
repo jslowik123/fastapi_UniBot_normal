@@ -89,10 +89,13 @@ async def delete_file(file_name: str = Form(...), namespace: str = Form(...), fi
         else:
             firebase = FirebaseConnection()
             firebase_result = firebase.delete_document_metadata(namespace, fileID)
-        
+            pinecone_result = con.delete_embeddings(file_name, namespace)
+
             return {
             "status": "success", 
             "message": f"File {file_name} deleted successfully",
+            "pinecone_status": "success",
+            "pinecone_message": pinecone_result["status"],
             "firebase_status": firebase_result["status"],
             "firebase_message": firebase_result["message"]
             }

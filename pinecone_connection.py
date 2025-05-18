@@ -51,6 +51,10 @@ class PineconeCon:
             namespace=namespace,
             filter={"file": file_name}
         )
+        return {
+            "status": "success",
+            "message": f"File {file_name} deleted successfully",
+        }
 
     def query(self, query: str, namespace: str, fileID: str,  num_results: int = 3) -> List[Dict[str, Any]]:
         response = self._openai.embeddings.create(
