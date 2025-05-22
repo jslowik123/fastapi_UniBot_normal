@@ -350,28 +350,39 @@ class DocProcessor:
 
             if self._firebase_available:
                 try:
-                    firebase_path = f"files/{namespace}/summary"
-                    # This assumes self._firebase has a method like set_data.
-                    # If your FirebaseConnection class uses a different method, this line will need adjustment.
-                    self._firebase.set_data(firebase_path, bullet_points) 
-                    return {
-                        "status": "success",
-                        "message": f"Globale Zusammenfassung erstellt und {len(bullet_points)} Stichpunkte in Firebase unter '{firebase_path}' gespeichert.",
-                        "bullet_points_count": len(bullet_points),
-                        "firebase_path": firebase_path
-                    }
-                except AttributeError:
-                    print(f"FirebaseConnection does not have a 'set_data' method. Bullet points not saved to Firebase.")
+                    # firebase_path = f"files/{namespace}/summary" # Path is handled by update_namespace_summary
+                    
+                    # Call the dedicated method in FirebaseConnection to store the bullet points
+                    firebase_storage_result = self._firebase.update_namespace_summary(namespace, bullet_points)
+                    
+                    if firebase_storage_result.get('status') == 'success':
+                        return {
+                            "status": "success",
+                            "message": firebase_storage_result.get('message', f"Globale Zusammenfassung erstellt und {len(bullet_points)} Stichpunkte in Firebase gespeichert."),
+                            "bullet_points_count": len(bullet_points),
+                            "firebase_path": firebase_storage_result.get('path')
+                        }
+                    else:
+                        # Error during Firebase storage via update_namespace_summary
+                        return {
+                            "status": "error_firebase_storage",
+                            "message": firebase_storage_result.get('message', "Unbekannter Fehler beim Speichern der globalen Zusammenfassung in Firebase."),
+                            "bullet_points_count": len(bullet_points)
+                        }
+                except AttributeError as e:
+                    # This could happen if update_namespace_summary doesn't exist on self._firebase
+                    print(f"FirebaseConnection does not have an 'update_namespace_summary' method or it's causing an AttributeError: {e}")
                     return {
                         "status": "error_firebase_method",
-                        "message": "FirebaseConnection hat keine 'set_data' Methode. Stichpunkte wurden extrahiert, aber nicht in Firebase gespeichert.",
+                        "message": "FirebaseConnection hat keine 'update_namespace_summary' Methode oder diese verursacht einen Fehler. Stichpunkte wurden extrahiert, aber nicht in Firebase gespeichert.",
                         "bullet_points": bullet_points
                     }
                 except Exception as e:
-                    print(f"Error saving global summary to Firebase: {str(e)}")
+                    # Catch any other unexpected error during the Firebase operation call
+                    print(f"Unexpected error calling FirebaseConnection method: {str(e)}")
                     return {
                         "status": "error_firebase_storage",
-                        "message": f"Fehler beim Speichern der globalen Zusammenfassung in Firebase: {str(e)}",
+                        "message": f"Unerwarteter Fehler beim Aufruf der Firebase-Speichermethode: {str(e)}",
                         "bullet_points_count": len(bullet_points)
                     }
             else:

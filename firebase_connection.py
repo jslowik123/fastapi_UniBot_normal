@@ -307,28 +307,30 @@ class FirebaseConnection:
                 'message': f'Error updating document status: {str(e)}'
             }
 
-    def update_namespace_summary(self, namespace: str, summary_text: str) -> Dict[str, Any]:
+    def update_namespace_summary(self, namespace: str, bullet_points: List[str]) -> Dict[str, Any]:
         """
-        Stores or updates a global summary for a given namespace.
+        Stores or updates a list of global summary bullet points for a given namespace.
         
         Args:
             namespace: The namespace to store the summary for.
-            summary_text: The global summary text.
+            bullet_points: A list of strings, where each string is a bullet point of the global summary.
             
         Returns:
             Dict with status information.
         """
         try:
-            ref = self._db.reference(f'files/{namespace}/summary')
-            ref.set(summary_text)
+            # Path for the global summary of the namespace
+            path = f'files/{namespace}/summary' 
+            ref = self._db.reference(path)
+            ref.set(bullet_points) # Store the list of bullet points
             return {
                 'status': 'success',
-                'message': f'Global summary for namespace {namespace} updated successfully.',
-                'path': ref.path
+                'message': f'Global summary bullet points for namespace {namespace} updated successfully at {path}.',
+                'path': path # ref.path should also work
             }
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Error updating global namespace summary: {str(e)}'
+                'message': f'Error updating global namespace summary bullet points: {str(e)}'
             }
 
