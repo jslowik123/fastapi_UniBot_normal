@@ -241,4 +241,54 @@ class DocProcessor:
             print(f"Original content: {response_content}")
             return {"id": extracted_data[0]["id"] if extracted_data else "default", "chunk_count": 5}
         
+    def generate_global_summary(self, documents_data: List[Dict[str, Any]]) -> str:
+        """
+        Generates a global summary from a list of document data (summaries or texts).
+        
+        Args:
+            documents_data: A list of dictionaries, where each dictionary represents a document
+                            and should contain a 'summary' or 'text' key.
+                            
+        Returns:
+            A string containing the global summary.
+        """
+        if not documents_data:
+            return "No documents found to summarize."
+
+        combined_text = ""
+        for doc in documents_data:
+            # Prioritize summary, fall back to cleaned_text if summary is not available
+            content = doc.get('summary')
+            if not content:
+                content = doc.get('cleaned_text') # Assuming _recondition_text stores cleaned_text
+            if not content:
+                 content = doc.get('text') # Fallback for very raw data
+            
+            if content:
+                combined_text += content + "\n\n" # Add a separator between document contents
+        
+        if not combined_text.strip():
+            return "No content available from documents to generate a summary."
+
+        prompt = {
+            "role": "system", 
+            "content": "You are an assistant tasked with creating a concise global summary. You will receive a collection of texts or summaries from multiple documents within the same category or namespace. Your goal is to synthesize this information into a single, coherent overview that captures the main themes and key information across all documents. The summary should be brief, ideally 3-5 sentences, but can be longer if necessary to cover diverse topics. Focus on commonalities and important distinctions."
+        }
+        
+        user_message = {
+            "role": "user",
+            "content": f"Please generate a global summary based on the following document contents:\n\n{combined_text}"
+        }
+        
+        try:
+            response = self._openai.chat.completions.create(
+                model="gpt-4.1-nano", # Consider using a more capable model for summarization if needed
+                messages=[prompt, user_message],
+                temperature=0.5, # Slightly higher temperature for more creative summarization
+            )
+            global_summary = response.choices[0].message.content
+            return global_summary.strip()
+        except Exception as e:
+            print(f"Error generating global summary: {str(e)}")
+            return "Error generating global summary."
 

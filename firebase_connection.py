@@ -307,3 +307,28 @@ class FirebaseConnection:
                 'message': f'Error updating document status: {str(e)}'
             }
 
+    def update_namespace_summary(self, namespace: str, summary: str) -> Dict[str, Any]:
+        """
+        Stores or updates a global summary for a given namespace.
+        
+        Args:
+            namespace: The namespace to store the summary for.
+            summary: The global summary text.
+            
+        Returns:
+            Dict with status information.
+        """
+        try:
+            ref = self._db.reference(f'files/{namespace}/_global_summary')
+            ref.set(summary)
+            return {
+                'status': 'success',
+                'message': f'Global summary for namespace {namespace} updated successfully.',
+                'path': ref.path
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error updating global namespace summary: {str(e)}'
+            }
+
