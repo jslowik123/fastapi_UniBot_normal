@@ -261,15 +261,12 @@ class DocProcessor:
                     "message": "Firebase connection not available"
                 }
 
-            # Get reference to the namespace documents
-            namespace_ref = self._firebase.db.collection('files').document(namespace).collection('documents')
-            
-            # Get all documents in the namespace
-            docs = namespace_ref.get()
+            ref = self._db.reference(f'files/{namespace}')
+            data = ref.get()
             
             # Extract summaries from documents
             summaries = []
-            for doc in docs:
+            for doc in data:
                 doc_data = doc.to_dict()
                 if doc_data and 'summary' in doc_data:
                     summaries.append(doc_data['summary'])
