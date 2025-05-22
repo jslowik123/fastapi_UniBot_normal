@@ -87,7 +87,7 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
                     'status': 'Complete'
                 })
             # Trigger the global summary generation task
-            generate_namespace_summary.delay(namespace, )
+            generate_namespace_summary.delay(namespace)
             return {
                 'status': 'success',
                 'message': result['message'],
@@ -135,66 +135,58 @@ def generate_namespace_summary(namespace: str):
     Generates and stores a global summary for all documents in a namespace.
     """
     try:
-        print(f"Starting global summary generation for namespace: {namespace}")
+        print(f"[TASK_generate_summary] Starting for namespace: {namespace}")
         
-        # Ensure DocProcessor instance is available (it's global in this file)
-        # global doc_processor # Not strictly needed if doc_processor is already in the global scope of the module
-
-        if not doc_processor._firebase_available: # Assuming doc_processor is the global instance
-            print(f"Firebase not available. Skipping global summary for {namespace}.")
+        if not doc_processor._firebase_available:
+            print(f"[TASK_generate_summary] Firebase not available. Skipping for {namespace}.")
             return {"status": "skipped", "message": "Firebase not available"}
 
         # 1. Fetch all document data from the namespace using DocProcessor's method
-        # This method should return List[Dict[str, Any]] suitable for generate_global_summary
-        documents_data_list = doc_processor.get_namespace_data(namespace)
+        print(f"[TASK_generate_summary] Fetching namespace data for: {namespace}")
+        namespace_data_response = doc_processor.get_namespace_data(namespace)
         
-        if not documents_data_list: # get_namespace_data returns a list
-            print(f"No data found for namespace {namespace} or error fetching data. Skipping summary.")
-            return {"status": "skipped", "message": "No documents or error fetching data from get_namespace_data"}
+        if namespace_data_response.get('status') != 'success':
+            error_msg = namespace_data_response.get('message', 'Error fetching namespace data.')
+            print(f"[TASK_generate_summary] Failed to fetch data for {namespace}: {error_msg}")
+            return {"status": "error_fetching_data", "message": error_msg, "namespace": namespace}
+            
+        documents_for_summary = namespace_data_response.get('data')
+        if not documents_for_summary: # This could be an empty dict if namespace exists but has no docs
+                                      # or if get_namespace_data returns data: {} for empty/not found
+            # DocProcessor.get_namespace_data (in firebase_connection) returns a list of dicts after processing.
+            # The direct call to firebase_connection.get_namespace_data returns a dict {docId: data, ...}
+            # The DocProcessor.get_namespace_data method processes this into a list.
+            # So documents_for_summary should be the list here.
+            print(f"[TASK_generate_summary] No documents found in namespace {namespace} to summarize.")
+            return {"status": "skipped", "message": f"No documents found in namespace {namespace} to summarize."}
 
-        # Filter out any potential non-document entries if get_namespace_data doesn't already do that
-        # The current get_namespace_data in DocProcessor already filters and returns a list of dicts
-        # with 'summary', 'keywords' etc.
-        
-        if not documents_data_list:
-            print(f"No document content found to summarize in namespace {namespace}.")
-            return {"status": "skipped", "message": "No document content to summarize"}
+        # At this point, documents_for_summary should be the list of dicts from DocProcessor.get_namespace_data
+        # The previous edit to DocProcessor.get_namespace_data ensured it returns List[Dict[str,Any]]
+        actual_documents_list = documents_for_summary # Assuming documents_for_summary is already the list.
+                                                  # If it were the raw dict from firebase.get_namespace_data, processing would be needed here.
+                                                  # Given that we call doc_processor.get_namespace_data, this should be the processed list.
 
-        # 2. Generate and store the global summary using the modified DocProcessor method
-        print(f"Generating global summary from {len(documents_data_list)} documents in namespace {namespace}.")
-        # The generate_global_summary method now takes namespace and documents_data
-        # and handles storing to Firebase itself.
-        summary_result = doc_processor.generate_global_summary(namespace=namespace, documents_data=documents_data_list)
+        if not actual_documents_list: # Final check on the list itself
+            print(f"[TASK_generate_summary] No processable document data found to summarize in namespace {namespace}.")
+            return {"status": "skipped", "message": "No processable document data to summarize"}
 
-        # 3. Log the result from generate_global_summary
+        # 2. Generate and store the global summary
+        print(f"[TASK_generate_summary] Generating summary from {len(actual_documents_list)} documents in {namespace}.")
+        summary_result = doc_processor.generate_global_summary(namespace=namespace, documents_data=actual_documents_list)
+
+        # 3. Log and return the result from generate_global_summary
         if summary_result.get("status") == "success":
-            print(f"Global summary for namespace {namespace} processed successfully by DocProcessor: {summary_result.get('message')}")
-            return summary_result # Return the detailed result from DocProcessor
-        elif summary_result.get("status") == "success_firebase_unavailable":
-            print(f"Global summary generated but Firebase was unavailable for storage for namespace {namespace}: {summary_result.get('message')}")
-            return summary_result
-        elif summary_result.get("status") == "success_no_points":
-            print(f"Global summary generation for {namespace} resulted in no bullet points: {summary_result.get('message')}")
-            return summary_result
+            print(f"[TASK_generate_summary] Success for {namespace}: {summary_result.get('message')}")
         else:
-            # Handles error_openai, error_firebase_storage, error_firebase_method, or other errors from DocProcessor
-            error_message = summary_result.get('message', 'Unknown error during summary generation in DocProcessor.')
-            print(f"Failed to generate/store global summary for {namespace} via DocProcessor: {error_message}")
-            # Optionally, update a general error status in Firebase if needed,
-            # but generate_global_summary might already log specifics.
-            # For example, if you had a general status field for the namespace:
-            # if doc_processor._firebase_available:
-            #     doc_processor._firebase.set_data(f"{namespace}/summary_status", {"error": error_message, "timestamp": time.time()})
-            return summary_result # Return the detailed error result from DocProcessor
+            # Handles error_openai, error_firebase_storage, error_firebase_method, success_no_points, etc.
+            error_message = summary_result.get('message', 'Unknown error or non-success status from DocProcessor.generate_global_summary.')
+            print(f"[TASK_generate_summary] Non-success status for {namespace} from DocProcessor: {error_message} (Status: {summary_result.get('status')})")
+        
+        return summary_result # Return the detailed result from DocProcessor
             
     except Exception as e:
-        print(f"Unhandled exception during global summary generation for {namespace}: {str(e)}")
-        # Optionally, update Firebase with an error status for the global summary
-        # This is a catch-all for unexpected errors in the task itself.
-        # if doc_processor._firebase_available: # Check again in case it became unavailable
-        #     try:
-        #         # A generic error logging for the namespace if specific methods aren't available
-        #         doc_processor._firebase.set_data(f"{namespace}/summary_status", {"error": f"Task level exception: {str(e)}", "timestamp": time.time()})
-        #     except Exception as fb_error:
-        #         print(f"Failed to log task-level exception to Firebase: {fb_error}")
-        return {"status": "error", "message": f"Unhandled task exception: {str(e)}"}
+        print(f"[TASK_generate_summary] Unhandled exception for {namespace}: {str(e)}")
+        # Log the traceback for more details on unexpected errors
+        import traceback
+        traceback.print_exc()
+        return {"status": "error", "message": f"Unhandled task exception: {str(e)}", "namespace": namespace}
