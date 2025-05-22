@@ -353,7 +353,7 @@ class DocProcessor:
 
             if self._firebase_available:
                 try:
-                    firebase_path = f"{namespace}/summary"
+                    firebase_path = f"files/{namespace}/summary"
                     # This assumes self._firebase has a method like set_data.
                     # If your FirebaseConnection class uses a different method, this line will need adjustment.
                     self._firebase.set_data(firebase_path, bullet_points) 
