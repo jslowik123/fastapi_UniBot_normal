@@ -253,24 +253,50 @@ class DocProcessor:
         Returns:
             A dictionary containing the status of the operation.
         """
+
+        try:
+            if not self._firebase_available:
+                return {
+                    "status": "error_firebase_unavailable",
+                    "message": "Firebase connection not available"
+                }
+
+            # Get reference to the namespace documents
+            namespace_ref = self._firebase.db.collection('files').document(namespace).collection('documents')
+            
+            # Get all documents in the namespace
+            docs = namespace_ref.get()
+            
+            # Extract summaries from documents
+            summaries = []
+            for doc in docs:
+                doc_data = doc.to_dict()
+                if doc_data and 'summary' in doc_data:
+                    summaries.append(doc_data['summary'])
+
+            if not summaries:
+                return {
+                    "status": "error",
+                    "message": "No summaries found in namespace documents"
+                }
+
+            # Combine all summaries with separators
+            combined_summaries = "\n\n---\n\n".join(summaries)
+
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Error retrieving document summaries: {str(e)}"
+            }
+        
         if not documents_data:
             return {
                 "status": "error",
                 "message": "Keine Dokumente zum Zusammenfassen gefunden."
             }
 
-        combined_text = ""
-        for doc in documents_data:
-            content = doc.get('summary')
-            if not content:
-                content = doc.get('cleaned_text') 
-            if not content:
-                 content = doc.get('text') 
-            
-            if content:
-                combined_text += content + "\n\n---\n\n" # Add a clear separator
-        
-        if not combined_text.strip():
+        if not summaries.strip():
             return {
                 "status": "error",
                 "message": "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
@@ -283,7 +309,7 @@ class DocProcessor:
         
         user_message = {
             "role": "user",
-            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist und das Ergebnis im geforderten JSON-Format vorliegt:\n\n{combined_text}"
+            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist und das Ergebnis im geforderten JSON-Format vorliegt:\n\n{summaries}"
         }
         
         bullet_points = []

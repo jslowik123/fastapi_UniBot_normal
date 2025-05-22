@@ -87,7 +87,7 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
                     'status': 'Complete'
                 })
             # Trigger the global summary generation task
-            generate_namespace_summary.delay(namespace)
+            generate_namespace_summary.delay(namespace, )
             return {
                 'status': 'success',
                 'message': result['message'],
