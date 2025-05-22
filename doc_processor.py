@@ -309,7 +309,7 @@ class DocProcessor:
         
         user_message = {
             "role": "user",
-            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist und das Ergebnis im geforderten JSON-Format vorliegt:\n\n{summaries}"
+            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist und das Ergebnis im geforderten JSON-Format vorliegt:\n\n{combined_summaries}"
         }
         
         bullet_points = []
