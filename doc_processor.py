@@ -192,7 +192,7 @@ class DocProcessor:
             
         return chunks
     
-    def get_namespace_data(self, namespace: str) -> str:
+    def get_namespace_data(self, namespace: str) -> List[Dict[str, Any]]:
         namespace_data = self._firebase.get_namespace_data(namespace)
         
         extracted_data = []
