@@ -250,45 +250,44 @@ class DocProcessor:
                             and should contain a 'summary' or 'text' key.
                             
         Returns:
-            A string containing the global summary.
+            A string containing the global summary in German bullet points.
         """
         if not documents_data:
-            return "No documents found to summarize."
+            return "Keine Dokumente zum Zusammenfassen gefunden."
 
         combined_text = ""
         for doc in documents_data:
-            # Prioritize summary, fall back to cleaned_text if summary is not available
             content = doc.get('summary')
             if not content:
-                content = doc.get('cleaned_text') # Assuming _recondition_text stores cleaned_text
+                content = doc.get('cleaned_text') 
             if not content:
-                 content = doc.get('text') # Fallback for very raw data
+                 content = doc.get('text') 
             
             if content:
-                combined_text += content + "\n\n" # Add a separator between document contents
+                combined_text += content + "\n\n---\n\n" # Add a clear separator
         
         if not combined_text.strip():
-            return "No content available from documents to generate a summary."
+            return "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
 
         prompt = {
             "role": "system", 
-            "content": "You are an assistant tasked with creating a concise global summary. You will receive a collection of texts or summaries from multiple documents within the same category or namespace. Your goal is to synthesize this information into a single, coherent overview that captures the main themes and key information across all documents. The summary should be brief, ideally 3-5 sentences, but can be longer if necessary to cover diverse topics. Focus on commonalities and important distinctions."
+            "content": "Du bist ein Assistent, der eine prägnante globale Zusammenfassung auf Deutsch und in Stichpunkten erstellen soll. Du erhältst eine Sammlung von Texten oder Zusammenfassungen aus mehreren Dokumenten derselben Kategorie oder desselben Namespace. Dein Ziel ist es, diese Informationen zu einer einzigen, kohärenten Übersicht zusammenzufassen, die die Hauptthemen und Schlüsselinformationen aller Dokumente erfasst. Präsentiere diese Übersicht als eine Reihe von Stichpunkten. Jeder Stichpunkt sollte prägnant und informativ sein. Konzentriere dich auf Gemeinsamkeiten und wichtige Unterschiede, die in den bereitgestellten Texten zu finden sind. Antworte ausschließlich auf Deutsch."
         }
         
         user_message = {
             "role": "user",
-            "content": f"Please generate a global summary based on the following document contents:\n\n{combined_text}"
+            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist:\n\n{combined_text}"
         }
         
         try:
             response = self._openai.chat.completions.create(
-                model="gpt-4.1-nano", # Consider using a more capable model for summarization if needed
+                model="gpt-4.1-nano", 
                 messages=[prompt, user_message],
-                temperature=0.5, # Slightly higher temperature for more creative summarization
+                temperature=0.3, # Lower temperature for more factual, structured output
             )
             global_summary = response.choices[0].message.content
             return global_summary.strip()
         except Exception as e:
             print(f"Error generating global summary: {str(e)}")
-            return "Error generating global summary."
+            return "Fehler beim Erstellen der globalen Zusammenfassung."
 

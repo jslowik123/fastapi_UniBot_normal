@@ -150,7 +150,7 @@ def generate_namespace_summary(namespace: str):
         documents = []
         # The actual documents are typically nested under their fileIDs
         for file_id, doc_content in namespace_data_response['data'].items():
-            if file_id == "_global_summary": # Skip the global summary itself
+            if file_id == "summary": # Skip the global summary itself
                 continue
             if isinstance(doc_content, dict):
                  # We need the summary or text of each document
