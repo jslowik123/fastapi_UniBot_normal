@@ -241,19 +241,23 @@ class DocProcessor:
             print(f"Original content: {response_content}")
             return {"id": extracted_data[0]["id"] if extracted_data else "default", "chunk_count": 5}
         
-    def generate_global_summary(self, documents_data: List[Dict[str, Any]]) -> str:
+    def generate_global_summary(self, namespace: str, documents_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
-        Generates a global summary from a list of document data (summaries or texts).
+        Generates a global summary from a list of document data and stores it in Firebase.
         
         Args:
+            namespace: The Firebase namespace where the summary will be stored.
             documents_data: A list of dictionaries, where each dictionary represents a document
                             and should contain a 'summary' or 'text' key.
                             
         Returns:
-            A string containing the global summary in German bullet points.
+            A dictionary containing the status of the operation.
         """
         if not documents_data:
-            return "Keine Dokumente zum Zusammenfassen gefunden."
+            return {
+                "status": "error",
+                "message": "Keine Dokumente zum Zusammenfassen gefunden."
+            }
 
         combined_text = ""
         for doc in documents_data:
@@ -267,27 +271,97 @@ class DocProcessor:
                 combined_text += content + "\n\n---\n\n" # Add a clear separator
         
         if not combined_text.strip():
-            return "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
+            return {
+                "status": "error",
+                "message": "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
+            }
 
         prompt = {
             "role": "system", 
-            "content": "Du bist ein Assistent, der eine prägnante globale Zusammenfassung auf Deutsch und in Stichpunkten erstellen soll. Du erhältst eine Sammlung von Texten oder Zusammenfassungen aus mehreren Dokumenten derselben Kategorie oder desselben Namespace. Dein Ziel ist es, diese Informationen zu einer einzigen, kohärenten Übersicht zusammenzufassen, die die Hauptthemen und Schlüsselinformationen aller Dokumente erfasst. Präsentiere diese Übersicht als eine Reihe von Stichpunkten. Jeder Stichpunkt sollte prägnant und informativ sein. Konzentriere dich auf Gemeinsamkeiten und wichtige Unterschiede, die in den bereitgestellten Texten zu finden sind. Antworte ausschließlich auf Deutsch."
+            "content": "Du bist ein Assistent, der eine prägnante globale Zusammenfassung erstellen soll. Du erhältst eine Sammlung von Texten oder Zusammenfassungen aus mehreren Dokumenten derselben Kategorie oder desselben Namespace. Dein Ziel ist es, diese Informationen zu einer einzigen, kohärenten Übersicht zusammenzufassen, die die Hauptthemen und Schlüsselinformationen aller Dokumente erfasst. Gib das Ergebnis als JSON-Objekt zurück, das einen einzigen Schlüssel 'bullet_points' enthält. Der Wert dieses Schlüssels soll eine Liste von Strings sein, wobei jeder String einen einzelnen Stichpunkt der Zusammenfassung auf Deutsch darstellt. Beispiel: {\"bullet_points\": [\"Stichpunkt 1\", \"Stichpunkt 2\", \"Stichpunkt 3\"]}. Antworte ausschließlich mit diesem JSON-Objekt und keinerlei zusätzlichem Text."
         }
         
         user_message = {
             "role": "user",
-            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist:\n\n{combined_text}"
+            "content": f"Bitte erstelle eine globale Zusammenfassung auf Deutsch und in Stichpunkten basierend auf den folgenden Dokumentinhalten. Stelle sicher, dass jeder Hauptpunkt ein separater Stichpunkt ist und das Ergebnis im geforderten JSON-Format vorliegt:\n\n{combined_text}"
         }
         
+        bullet_points = []
         try:
             response = self._openai.chat.completions.create(
                 model="gpt-4.1-nano", 
+                response_format={"type": "json_object"},
                 messages=[prompt, user_message],
-                temperature=0.3, # Lower temperature for more factual, structured output
+                temperature=0.3,
             )
-            global_summary = response.choices[0].message.content
-            return global_summary.strip()
+            response_content = response.choices[0].message.content
+            try:
+                summary_data = json.loads(response_content)
+                bullet_points = summary_data.get("bullet_points", [])
+                if not isinstance(bullet_points, list) or not all(isinstance(item, str) for item in bullet_points):
+                    print(f"OpenAI did not return a list of strings for bullet_points. Received: {bullet_points}")
+                    # Fallback or error handling if structure is not as expected
+                    bullet_points = [] # Reset to empty if format is wrong
+                    # Potentially return an error if strict format is critical
+                    # For now, proceed with empty list if format is wrong, Firebase part will be skipped.
+            except json.JSONDecodeError:
+                print(f"Error decoding JSON from OpenAI: {response_content}")
+                # Fallback: try to extract bullet points from raw text if it looks like a list
+                # This is a simple heuristic and might not always work.
+                if response_content.strip().startswith("- ") or response_content.strip().startswith("* "):
+                    bullet_points = [line.strip("-* ") for line in response_content.split('\n') if line.strip("-* ")]
+                if not bullet_points:
+                     return {
+                        "status": "error",
+                        "message": "Fehler beim Parsen der globalen Zusammenfassung von OpenAI. Ungültiges JSON-Format.",
+                        "raw_response": response_content
+                    }
+
+
+            if not bullet_points:
+                return {
+                    "status": "success_no_points",
+                    "message": "Globale Zusammenfassung von OpenAI erhalten, aber keine Stichpunkte extrahiert/gefunden.",
+                    "raw_response": response_content
+                }
+
+            if self._firebase_available:
+                try:
+                    firebase_path = f"{namespace}/summary"
+                    # This assumes self._firebase has a method like set_data.
+                    # If your FirebaseConnection class uses a different method, this line will need adjustment.
+                    self._firebase.set_data(firebase_path, bullet_points) 
+                    return {
+                        "status": "success",
+                        "message": f"Globale Zusammenfassung erstellt und {len(bullet_points)} Stichpunkte in Firebase unter '{firebase_path}' gespeichert.",
+                        "bullet_points_count": len(bullet_points),
+                        "firebase_path": firebase_path
+                    }
+                except AttributeError:
+                    print(f"FirebaseConnection does not have a 'set_data' method. Bullet points not saved to Firebase.")
+                    return {
+                        "status": "error_firebase_method",
+                        "message": "FirebaseConnection hat keine 'set_data' Methode. Stichpunkte wurden extrahiert, aber nicht in Firebase gespeichert.",
+                        "bullet_points": bullet_points
+                    }
+                except Exception as e:
+                    print(f"Error saving global summary to Firebase: {str(e)}")
+                    return {
+                        "status": "error_firebase_storage",
+                        "message": f"Fehler beim Speichern der globalen Zusammenfassung in Firebase: {str(e)}",
+                        "bullet_points_count": len(bullet_points)
+                    }
+            else:
+                return {
+                    "status": "success_firebase_unavailable",
+                    "message": "Globale Zusammenfassung erstellt, aber Firebase nicht verfügbar. Stichpunkte nicht gespeichert.",
+                    "bullet_points": bullet_points
+                }
+
         except Exception as e:
-            print(f"Error generating global summary: {str(e)}")
-            return "Fehler beim Erstellen der globalen Zusammenfassung."
+            print(f"Error generating global summary with OpenAI: {str(e)}")
+            return {
+                "status": "error_openai",
+                "message": f"Fehler beim Erstellen der globalen Zusammenfassung mit OpenAI: {str(e)}"
+            }
 
