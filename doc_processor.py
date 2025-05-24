@@ -241,7 +241,7 @@ class DocProcessor:
             print(f"Original content: {response_content}")
             return {"id": extracted_data[0]["id"] if extracted_data else "default", "chunk_count": 5}
         
-    def generate_global_summary(self, namespace: str, documents_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def generate_global_summary(self, namespace: str) -> Dict[str, Any]:
         """
         Generates a global summary from a list of document data and stores it in Firebase.
         
@@ -255,50 +255,54 @@ class DocProcessor:
         """
 
         try:
+            # This block is for Firebase interaction and initial data validation
             if not self._firebase_available:
                 return {
                     "status": "error_firebase_unavailable",
                     "message": "Firebase connection not available"
                 }
 
-            ref = self._db.reference(f'files/{namespace}')
-            data = ref.get()
-            
-            # Extract summaries from documents
+            firebase_data_response = self._firebase.get_namespace_data(namespace)
+            return firebase_data_response
+            if firebase_data_response.get('status') != 'success' or not firebase_data_response.get('data'):
+                return {
+                    "status": "error_firebase_data",
+                    "message": firebase_data_response.get('message', "Error fetching data from Firebase or no data found.")
+                }
+
+            documents_data = firebase_data_response['data']
             summaries = []
-            for doc in data:
-                doc_data = doc.to_dict()
-                if doc_data and 'summary' in doc_data:
-                    summaries.append(doc_data['summary'])
+            if isinstance(documents_data, dict):
+                for doc_id, doc_content in documents_data.items():
+                    if doc_id == 'summary' and isinstance(doc_content, list) and all(isinstance(item, str) for item in doc_content):
+                        continue 
+                    if isinstance(doc_content, dict) and 'summary' in doc_content:
+                        summaries.append(doc_content['summary'])
+            else:
+                return {
+                    "status": "error_firebase_data_format",
+                    "message": "Data from Firebase is not in the expected format (dictionary of documents)."
+                }
 
             if not summaries:
                 return {
                     "status": "error",
-                    "message": "No summaries found in namespace documents"
+                    "message": "No summaries found in namespace documents to generate a global summary."
                 }
-
-            # Combine all summaries with separators
+            
             combined_summaries = "\n\n---\n\n".join(summaries)
-
-
-        except Exception as e:
+            if not combined_summaries.strip():
+                return {
+                    "status": "error",
+                    "message": "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
+                }
+        except Exception as e: # Catches errors from the try block above (Firebase interaction)
             return {
-                "status": "error",
-                "message": f"Error retrieving document summaries: {str(e)}"
+                "status": "error_firebase_interaction",
+                "message": f"Error during Firebase interaction or initial data processing: {str(e)}"
             }
         
-        if not documents_data:
-            return {
-                "status": "error",
-                "message": "Keine Dokumente zum Zusammenfassen gefunden."
-            }
-
-        if not summaries.strip():
-            return {
-                "status": "error",
-                "message": "Kein Inhalt aus Dokumenten verfügbar, um eine Zusammenfassung zu erstellen."
-            }
-
+        # If Firebase interaction and summary collection was successful, proceed to OpenAI call
         prompt = {
             "role": "system", 
             "content": "Du bist ein Assistent, der eine prägnante globale Zusammenfassung erstellen soll. Du erhältst eine Sammlung von Texten oder Zusammenfassungen aus mehreren Dokumenten derselben Kategorie oder desselben Namespace. Dein Ziel ist es, diese Informationen zu einer einzigen, kohärenten Übersicht zusammenzufassen, die die Hauptthemen und Schlüsselinformationen aller Dokumente erfasst. Gib das Ergebnis als JSON-Objekt zurück, das einen einzigen Schlüssel 'bullet_points' enthält. Der Wert dieses Schlüssels soll eine Liste von Strings sein, wobei jeder String einen einzelnen Stichpunkt der Zusammenfassung auf Deutsch darstellt. Beispiel: {\"bullet_points\": [\"Stichpunkt 1\", \"Stichpunkt 2\", \"Stichpunkt 3\"]}. Antworte ausschließlich mit diesem JSON-Objekt und keinerlei zusätzlichem Text."
