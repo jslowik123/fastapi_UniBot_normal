@@ -1,12 +1,13 @@
 from fastapi import FastAPI, UploadFile, Form, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 import pinecone
 import PyPDF2
 from dotenv import load_dotenv
 import os
 import uvicorn
 from pinecone_connection import PineconeCon
-from chatbot import get_bot, message_bot
+from chatbot import get_bot, message_bot, message_bot_stream
 from doc_processor import DocProcessor
 import tempfile
 from firebase_connection import FirebaseConnection
@@ -14,6 +15,8 @@ from celery_app import test_task, celery
 from tasks import process_document
 from redis import Redis
 import time
+import json
+import asyncio
 from celery.exceptions import Ignore
 
 load_dotenv()
@@ -117,11 +120,11 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
         return {"status": "error", "message": "Bot not started. Please call /start_bot first"}
     
     try:
-        extracted_namespace_data = doc_processor.get_namespace_data(namespace)
-        if not extracted_namespace_data:
+        database_overview = doc_processor.get_namespace_data(namespace)
+        if not database_overview:
             return {"status": "error", "message": f"No documents found in namespace {namespace}"}
             
-        appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
+        appropiate_document = doc_processor.appropiate_document_search(namespace, database_overview, user_input)
         
         if not appropiate_document or "id" not in appropiate_document:
             return {"status": "error", "message": "Could not find appropriate document for query"}
@@ -144,7 +147,7 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
             
         context = "\n".join(context_parts)
         
-        response = message_bot(user_input, context, "", chat_state.chat_history)
+        response = message_bot(user_input, context, "",database_overview, chat_state.chat_history)
         
         chat_state.chat_history.append({"role": "user", "content": user_input})
         chat_state.chat_history.append({"role": "assistant", "content": response})
@@ -320,6 +323,99 @@ async def get_task_status(task_id: str):
             'progress': 0
         }
         raise HTTPException(status_code=500, detail=error_detail)
+
+
+@app.post("/send_message_stream")
+async def send_message_stream(user_input: str = Form(...), namespace: str = Form(...)):
+    """
+    Streaming version of send_message that sends Server-Sent Events with real-time AI streaming
+    """
+    if not chat_state.chain:
+        # Send error event
+        async def error_generator():
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Bot not started. Please call /start_bot first'})}\n\n"
+        
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/plain",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "*",
+            }
+        )
+    
+    async def generate_response():
+        try:
+            # Send initial processing event
+            yield f"data: {json.dumps({'type': 'chunk', 'content': ''})}\n\n"
+            await asyncio.sleep(0.1)
+            
+            # Get namespace data
+            extracted_namespace_data = doc_processor.get_namespace_data(namespace)
+            if not extracted_namespace_data:
+                yield f"data: {json.dumps({'type': 'error', 'message': f'No documents found in namespace {namespace}'})}\n\n"
+                return
+            
+            # Find appropriate document
+            appropiate_document = doc_processor.appropiate_document_search(namespace, extracted_namespace_data, user_input)
+            if not appropiate_document or "id" not in appropiate_document:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Could not find appropriate document for query'})}\n\n"
+                return
+            
+            # Query Pinecone
+            results = con.query(
+                query=user_input, 
+                namespace=namespace, 
+                fileID=appropiate_document["id"], 
+                num_results=3
+            )
+            
+            # Extract context
+            context_parts = []
+            for match in results.matches:
+                if hasattr(match, 'metadata') and 'text' in match.metadata:
+                    context_parts.append(match.metadata['text'])
+            
+            if not context_parts:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant content found for query'})}\n\n"
+                return
+                
+            context = "\n".join(context_parts)
+            
+            # Stream the response from AI in real-time
+            accumulated_response = ""
+            
+            # Use the streaming function
+            for chunk in message_bot_stream(user_input, context, "", extracted_namespace_data, chat_state.chat_history):
+                accumulated_response += chunk
+                
+                # Send chunk event with only the new chunk (not accumulated)
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                await asyncio.sleep(0.01)  # Small delay to prevent overwhelming the client
+            
+            # Update chat history after streaming is complete
+            chat_state.chat_history.append({"role": "user", "content": user_input})
+            chat_state.chat_history.append({"role": "assistant", "content": accumulated_response})
+            
+            # Send completion event
+            yield f"data: {json.dumps({'type': 'complete', 'fullResponse': accumulated_response})}\n\n"
+            
+        except Exception as e:
+            print(f"Error in send_message_stream: {str(e)}")
+            yield f"data: {json.dumps({'type': 'error', 'message': f'Error processing message: {str(e)}'})}\n\n"
+    
+    return StreamingResponse(
+        generate_response(),
+        media_type="text/plain",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
 
 
 if __name__ == "__main__":
