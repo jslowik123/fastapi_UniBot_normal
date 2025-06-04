@@ -137,40 +137,7 @@ def message_bot_stream(user_input, context, knowledge, database_overview, chat_h
             streaming=True  # Enable streaming
         )
 
-        prompt_template = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität.
-                        Deine Antworten basieren ausschließlich auf zwei Arten von Informationen:
-                        1. Allgemeines Wissen:
-                        Informationen, die für das deutsche Hochschulsystem allgemein gelten. Dazu gehören z. B.: – Gesetzliche Regelungen (z. B. Hochschulrahmengesetz, Prüfungsordnungen)
-                        – Strukturen und Begriffe wie ECTS, Regelstudienzeit, Moduldefinitionen
-                        → {knowledge}
-                        2. Spezifisches Wissen:
-                        Dokumente, die durch Nutzer hochgeladen wurden und hochschulspezifische Inhalte enthalten. Beispiele: – Modulhandbücher
-                        – Studien- und Prüfungsordnungen
-                        – Ablaufpläne oder hochschulinterne Regelungen
-                        → {context}
-                        Hier siehst du eine Übersicht über die gesamte Datenbank aus denen du Informationen bekommst.
-                        {database_overview}
-                        Wichtige Regeln für dein Verhalten:
-                        Nutze beide Quellen gleichberechtigt, sofern sie relevante Informationen enthalten.
-                        Wenn es zwischen allgemeinem und spezifischem Wissen einen Widerspruch gibt, weise höflich darauf hin, ohne eine Annahme zu treffen.
-                        Wenn du keine ausreichenden Informationen in beiden Quellen findest, sage dies offen und freundlich.
-                        Erfinde niemals Inhalte. Spekuliere nicht. Stütze deine Antworten ausschließlich auf die bereitgestellten Informationen.
-                        Antworte klar, professionell und verständlich. Stelle Rückfragen, wenn die Nutzeranfrage unklar oder unvollständig ist.
-                        """
-                ),
-                MessagesPlaceholder(variable_name="chat_history"),
-                (
-                    "human",
-                    "{input}",
-                ),
-            ]
-        )
-
-        chain = prompt_template | llm
+        chain = get_bot()
         
         # Stream the response
         for chunk in chain.stream({
