@@ -7,17 +7,10 @@ if __name__ == "__main__":
     # Start bot first
     bot = requests.post("https://uni-chatbot-e2bc39ffc8de.herokuapp.com/start_bot")
     time.sleep(5)
-    
-    # Test regular endpoint
-    print("=== Testing regular /send_message ===")
-    response = requests.post("https://uni-chatbot-e2bc39ffc8de.herokuapp.com/send_message", 
-                           data={"user_input": "Was ist Python?", "namespace": "zwischenpraesentation"})
-    print(f"Status: {response.status_code}, Response: {response.json()}")
-    
     print("\n=== Testing streaming /send_message_stream ===")
     # Test streaming endpoint
     stream_response = requests.post("https://uni-chatbot-e2bc39ffc8de.herokuapp.com/send_message_stream", 
-                                  data={"user_input": "Erkläre mir ECTS-Punkte", "namespace": "zwischenpraesentation"}, 
+                                  data={"user_input": "Woraus setzten sich module zusammen?", "namespace": "zwischenpraesentation"}, 
                                   stream=True)
     
     print(f"Stream Status: {stream_response.status_code}")

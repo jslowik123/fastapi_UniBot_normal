@@ -14,7 +14,6 @@ def get_bot():
 
     llm = ChatOpenAI(model="gpt-4o-mini")
 
-    chat_history = []
 
     prompt_template = ChatPromptTemplate.from_messages(
         [
@@ -34,6 +33,9 @@ def get_bot():
                     Hier siehst du eine Übersicht über die gesamte Datenbank aus denen du Informationen bekommst.
                     {database_overview}
                     Wichtige Regeln für dein Verhalten:
+                    Wenn du Informationen aus dem bereitgestellten Kontext entnimmst, kennzeichne die entsprechende Textstelle als Quelle, indem du den Originalsatz oder die Originalsätze in folgende Markierung einfügst:
+                    ## [Originaltext] ##
+                    Diese Markierung dient als Quellenangabe und kann am Ende 1:1 übernommen werden.
                     Nutze beide Quellen gleichberechtigt, sofern sie relevante Informationen enthalten.
                     Wenn es zwischen allgemeinem und spezifischem Wissen einen Widerspruch gibt, weise höflich darauf hin, ohne eine Annahme zu treffen.
                     Wenn du keine ausreichenden Informationen in beiden Quellen findest, sage dies offen und freundlich.
