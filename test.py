@@ -1,25 +1,65 @@
-from doc_processor import DocProcessor
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
-import requests
-import time
+from dotenv import load_dotenv
 
-if __name__ == "__main__":
-    # Start bot first
-    bot = requests.post("https://uni-chatbot-e2bc39ffc8de.herokuapp.com/start_bot")
-    time.sleep(5)
-    print("\n=== Testing streaming /send_message_stream ===")
-    # Test streaming endpoint
-    stream_response = requests.post("https://uni-chatbot-e2bc39ffc8de.herokuapp.com/send_message_stream", 
-                                  data={"user_input": "Woraus setzten sich module zusammen?", "namespace": "zwischenpraesentation"}, 
-                                  stream=True)
-    
-    print(f"Stream Status: {stream_response.status_code}")
-    if stream_response.status_code == 200:
-        for line in stream_response.iter_lines():
-            if line:
-                decoded_line = line.decode('utf-8')
-                if decoded_line.startswith('data: '):
-                    print(f"Stream chunk: {decoded_line}")
-    else:
-        print(f"Stream Error: {stream_response.text}")
-    
+load_dotenv()
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+
+prompt_template = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                """Bitte beantworte die vom User gestellte Frage basierend auf dem beigefügten Text.
+                Ich möchte einen structured output, einmal das field "answer" und einmal das field "source".
+                Das field "answer" soll die Antwort auf die Frage enthalten.
+                Das field "source" soll die Quelle der Antwort enthalten.
+                Die Quelle soll der Originaltext/Satz sein, der die Antwort enthält.
+                
+                Der text ist:
+                Orangen sind braun und wiegen 100kg.
+            
+                    """
+            ),
+            (
+                "human",
+                "{input}",
+            ),
+        ]
+    )
+
+
+chain = prompt_template | llm
+
+
+
+try:
+
+    load_dotenv()
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        print("API-Schlüssel nicht gefunden.", end=" ")
+        
+
+    llm = ChatOpenAI(
+        model="gpt-4o-mini",
+        streaming=True  # Enable streaming
+    )
+
+        
+        # Stream the response
+    for chunk in chain.stream({
+            "input": "Wie viel wiegen Orangen?",
+        
+    }):
+        if hasattr(chunk, 'content') and chunk.content:
+            print(chunk.content, end="", )
+        
+except Exception as e:
+        print(f"Error in message_bot_stream: {str(e)}")
+        print("Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.")
