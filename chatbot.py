@@ -35,6 +35,7 @@ def get_bot():
                     Wenn du keine ausreichenden Informationen in beiden Quellen findest, sage dies offen und freundlich.
                     Erfinde niemals Inhalte. Spekuliere nicht. Stütze deine Antworten ausschließlich auf die bereitgestellten Informationen.
                     Antworte klar, professionell und verständlich. Stelle Rückfragen, wenn die Nutzeranfrage unklar oder unvollständig ist.
+                    Beachte bitte die Chat History, wenn eine Frage in vorherhigen Nachrichten nicht beatwortet wurde, antworte auf diese Frage, wenn sie schon beantwortet wurde, antworte nicht erneut.
                     Gib mir die Antwort als structured output.
                     Das field "answer" soll die Antwort auf die Frage enthalten.
                     Das field "source" soll die Quelle der Antwort enthalten, dort soll der Originaltext/Satz sein, aus der du die Antwort hast. Die stelle sollst du 1zu1 übernehmen.
