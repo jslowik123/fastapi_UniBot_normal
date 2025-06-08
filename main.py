@@ -147,7 +147,7 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
             
         context = "\n".join(context_parts)
         
-        response = message_bot(user_input, context, "",database_overview, chat_state.chat_history)
+        response = message_bot(user_input, context, "",database_overview, appropiate_document["id"], chat_state.chat_history)
         
         chat_state.chat_history.append({"role": "user", "content": user_input})
         chat_state.chat_history.append({"role": "assistant", "content": response})
@@ -388,7 +388,7 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
             accumulated_response = ""
             
             # Use the streaming function
-            for chunk in message_bot_stream(user_input, context, "", extracted_namespace_data, chat_state.chat_history):
+            for chunk in message_bot_stream(user_input, context, "", extracted_namespace_data, appropiate_document["id"], chat_state.chat_history):
                 accumulated_response += chunk
                 
                 # Send chunk event with only the new chunk (not accumulated)
