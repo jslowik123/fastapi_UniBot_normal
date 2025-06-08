@@ -28,6 +28,8 @@ def get_bot():
                     – Studien- und Prüfungsordnungen
                     – Ablaufpläne oder hochschulinterne Regelungen
                     → {context}
+                    Hier hast du noch die DokumentenID, die du 1zu1 in das Feld "document_id" übernehmen sollst: 
+                    "{document_id}"
                     Hier siehst du eine Übersicht über die gesamte Datenbank aus denen du Informationen bekommst.
                     {database_overview}
                     Wichtige Regeln für dein Verhalten.
@@ -38,6 +40,7 @@ def get_bot():
                     Beachte bitte die Chat History, wenn eine Frage in vorherhigen Nachrichten nicht beatwortet wurde, antworte auf diese Frage, wenn sie schon beantwortet wurde, antworte nicht erneut.
                     Gib mir die Antwort als structured output.
                     Das field "answer" soll die Antwort auf die Frage enthalten.
+                    Das field "document_id" soll die DokumentenID enthalten, die du 1zu1 übernehmen sollst.
                     Das field "source" soll die Quelle der Antwort enthalten, dort soll der Originaltext/Satz sein, aus der du die Antwort hast. Die stelle sollst du 1zu1 übernehmen.
                     """
             ),
@@ -53,7 +56,7 @@ def get_bot():
     chain = prompt_template | llm
     return chain
 
-def message_bot(user_input, context, knowledge, database_overview, chat_history):
+def message_bot(user_input, context, knowledge, database_overview, document_id, chat_history):
     try:
         if not user_input or not isinstance(user_input, str):
             return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
@@ -84,6 +87,7 @@ def message_bot(user_input, context, knowledge, database_overview, chat_history)
             "context": context,
             "knowledge": knowledge,
             "database_overview": database_overview,
+            "document_id": document_id,
             "chat_history": formatted_history,
             
         })
@@ -99,7 +103,7 @@ def message_bot(user_input, context, knowledge, database_overview, chat_history)
         print(f"Error in message_bot: {str(e)}")
         return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
-def message_bot_stream(user_input, context, knowledge, database_overview, chat_history):
+def message_bot_stream(user_input, context, knowledge, database_overview, document_id, chat_history):
     """
     Streaming version of message_bot that yields real-time chunks from OpenAI
     """
@@ -145,6 +149,7 @@ def message_bot_stream(user_input, context, knowledge, database_overview, chat_h
             "context": context,
             "knowledge": knowledge,
             "database_overview": database_overview,
+            "document_id": document_id,
             "chat_history": formatted_history,
         }):
             if hasattr(chunk, 'content') and chunk.content:
