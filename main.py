@@ -328,16 +328,15 @@ async def get_task_status(task_id: str):
 @app.post("/send_message_stream")
 async def send_message_stream(user_input: str = Form(...), namespace: str = Form(...)):
     """
-    Streaming version of send_message that sends Server-Sent Events with real-time AI streaming
+    Streaming version of send_message that sends Server-Sent Events with typed JSON chunks
     """
     if not chat_state.chain:
-        # Send error event
         async def error_generator():
             yield f"data: {json.dumps({'type': 'error', 'message': 'Bot not started. Please call /start_bot first'})}\n\n"
         
         return StreamingResponse(
             error_generator(),
-            media_type="text/plain",
+            media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
@@ -349,7 +348,7 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
     async def generate_response():
         try:
             # Send initial processing event
-            yield f"data: {json.dumps({'type': 'chunk', 'content': ''})}\n\n"
+            yield f"data: {json.dumps({'type': 'chunk', 'data': ''})}\n\n"
             await asyncio.sleep(0.1)
             
             # Get namespace data
@@ -384,23 +383,33 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
                 
             context = "\n".join(context_parts)
             
-            # Stream the response from AI in real-time
-            accumulated_response = ""
+            # Send source and document_id as separate typed chunks
+            yield f"data: {json.dumps({'type': 'source', 'data': extracted_namespace_data.get('source', '')})}\n\n"
+            yield f"data: {json.dumps({'type': 'document_id', 'data': appropiate_document['id']})}\n\n"
             
-            # Use the streaming function
+            # Stream the answer from AI in real-time
+            accumulated_response = ""
+            chunk_count = 0
+            max_chunks = 100  # Safety limit to prevent infinite streaming
+            
             for chunk in message_bot_stream(user_input, context, "", extracted_namespace_data, appropiate_document["id"], chat_state.chat_history):
                 accumulated_response += chunk
+                chunk_count += 1
                 
-                # Send chunk event with only the new chunk (not accumulated)
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+                # Send answer chunk with isFinal flag
+                is_final = chunk_count >= max_chunks or not chunk  # Simplified final chunk detection
+                yield f"data: {json.dumps({'type': 'answer', 'data': chunk, 'isFinal': is_final})}\n\n"
                 await asyncio.sleep(0.01)  # Small delay to prevent overwhelming the client
+                
+                if is_final:
+                    break
             
-            # Update chat history after streaming is complete
+            # Update chat history after streaming answer
             chat_state.chat_history.append({"role": "user", "content": user_input})
             chat_state.chat_history.append({"role": "assistant", "content": accumulated_response})
             
             # Send completion event
-            yield f"data: {json.dumps({'type': 'complete', 'fullResponse': accumulated_response})}\n\n"
+            yield f"data: {json.dumps({'type': 'end'})}\n\n"
             
         except Exception as e:
             print(f"Error in send_message_stream: {str(e)}")
@@ -408,7 +417,7 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
     
     return StreamingResponse(
         generate_response(),
-        media_type="text/plain",
+        media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
@@ -416,15 +425,3 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
             "Access-Control-Allow-Headers": "*",
         }
     )
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run(
-        "main:app", 
-        host="0.0.0.0", 
-        port=port,
-        timeout_keep_alive=120,
-        timeout_graceful_shutdown=120
-    )
-    
