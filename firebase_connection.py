@@ -6,80 +6,112 @@ import json
 import os
 import re
 
+
 class FirebaseConnection:
+    """
+    Handles connections and operations with Firebase Realtime Database.
+    
+    Manages document metadata storage, retrieval, and namespace operations
+    for the university chatbot system.
+    """
+    
     def __init__(self):
         """
-        Initialisiert die Firebase-Verbindung über Umgebungsvariablen:
-        - FIREBASE_DATABASE_URL: URL der Firebase Realtime Database
-        - FIREBASE_CREDENTIALS_PATH: Optionaler Pfad zu einer Credentials-Datei
-        - FIREBASE_CREDENTIALS_JSON: Optionaler JSON-String mit Credentials
+        Initialize Firebase connection using environment variables.
+        
+        Environment variables used:
+        - FIREBASE_DATABASE_URL: URL of Firebase Realtime Database (required)
+        - FIREBASE_CREDENTIALS_PATH: Path to credentials file (optional)
+        - FIREBASE_CREDENTIALS_JSON: JSON string with credentials (optional, for Heroku)
+        
+        Raises:
+            ValueError: If FIREBASE_DATABASE_URL is not set
         """
         database_url = os.getenv('FIREBASE_DATABASE_URL')
         if not database_url:
-            raise ValueError("FIREBASE_DATABASE_URL Umgebungsvariable muss gesetzt sein")
+            raise ValueError("FIREBASE_DATABASE_URL environment variable must be set")
             
         if not firebase_admin._apps:
-            # Prüfen, ob Credentials als JSON-String oder als Dateipfad vorhanden sind
-            credentials_path = os.getenv('FIREBASE_CREDENTIALS_PATH')
-            credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
-            
-            if credentials_json:
-                try:
-                    # Aus JSON-String initialisieren
-                    cred_dict = json.loads(credentials_json)
-                    cred = credentials.Certificate(cred_dict)
-                    firebase_admin.initialize_app(cred, {
-                        'databaseURL': database_url
-                    })
-                except json.JSONDecodeError as e:
-                    print(f"Fehler beim Decodieren des JSON-Strings: {str(e)}")
-                    # Fallback: Versuche, die Credentials-Datei zu verwenden
-                    if credentials_path and os.path.exists(credentials_path):
-                        cred = credentials.Certificate(credentials_path)
-                        firebase_admin.initialize_app(cred, {
-                            'databaseURL': database_url
-                        })
-                    else:
-                        # Notfall-Fallback ohne Credentials
-                        firebase_admin.initialize_app(options={
-                            'databaseURL': database_url
-                        })
-            elif credentials_path and os.path.exists(credentials_path):
-                # Aus Datei initialisieren
-                cred = credentials.Certificate(credentials_path)
-                firebase_admin.initialize_app(cred, {
-                    'databaseURL': database_url
-                })
-            else:
-                # Fallback ohne Credentials (nur für öffentliche DB ohne Authentifizierung)
-                firebase_admin.initialize_app(options={
-                    'databaseURL': database_url
-                })
+            self._initialize_firebase_app(database_url)
         
         self._db = db
 
-    def append_metadata(self, namespace: str, fileID: str, chunk_count: int, keywords: List[str], summary: str) -> Dict[str, Any]:
+    def _initialize_firebase_app(self, database_url: str):
         """
-        Speichert Metadaten zu einem Dokument in Firebase.
+        Initialize Firebase app with appropriate credentials.
         
         Args:
-            namespace: Der Namespace, in dem das Dokument gespeichert ist
-            fileID: Die ID des Dokuments
-            chunk_count: Die Anzahl der Chunks
-            keywords: Liste der Schlüsselwörter
-            summary: Zusammenfassung des Dokuments
+            database_url: Firebase database URL
+        """
+        credentials_path = os.getenv('FIREBASE_CREDENTIALS_PATH')
+        credentials_json = os.getenv('FIREBASE_CREDENTIALS_JSON')
+        
+        if credentials_json:
+            try:
+                # Initialize from JSON string
+                cred_dict = json.loads(credentials_json)
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred, {
+                    'databaseURL': database_url
+                })
+            except json.JSONDecodeError as e:
+                print(f"Error decoding JSON credentials: {str(e)}")
+                # Fallback to file credentials or no auth
+                self._fallback_initialization(database_url, credentials_path)
+        elif credentials_path and os.path.exists(credentials_path):
+            # Initialize from file
+            cred = credentials.Certificate(credentials_path)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': database_url
+            })
+        else:
+            # Fallback without credentials (public DB only)
+            firebase_admin.initialize_app(options={
+                'databaseURL': database_url
+            })
+
+    def _fallback_initialization(self, database_url: str, credentials_path: str = None):
+        """
+        Fallback initialization when JSON credentials fail.
+        
+        Args:
+            database_url: Firebase database URL
+            credentials_path: Optional path to credentials file
+        """
+        if credentials_path and os.path.exists(credentials_path):
+            cred = credentials.Certificate(credentials_path)
+            firebase_admin.initialize_app(cred, {
+                'databaseURL': database_url
+            })
+        else:
+            # Emergency fallback without credentials
+            firebase_admin.initialize_app(options={
+                'databaseURL': database_url
+            })
+
+    def append_metadata(self, namespace: str, fileID: str, chunk_count: int, 
+                       keywords: List[str], summary: str) -> Dict[str, Any]:
+        """
+        Store or update document metadata in Firebase.
+        
+        Args:
+            namespace: Namespace where the document is stored
+            fileID: Unique document identifier
+            chunk_count: Number of text chunks created
+            keywords: List of extracted keywords
+            summary: Document summary
             
         Returns:
-            Dict mit Statusinformationen
+            Dict containing operation status and information
         """
         try:
-            # Pfad zum Dokument in der Datenbank
+            # Database path for the document
             ref = self._db.reference(f'files/{namespace}/{fileID}')
             
-            # Bestehende Daten abrufen
+            # Get existing data
             existing_data = ref.get() or {}
             
-            # Neue Daten mit bestehenden Daten zusammenführen
+            # Merge keywords (remove duplicates)
             existing_keywords = existing_data.get('keywords', [])
             combined_keywords = list(set(existing_keywords + keywords))
             
@@ -89,33 +121,33 @@ class FirebaseConnection:
                 'summary': summary,
             }
             
-            # Nur aktualisieren, wenn ein Feld nicht bereits existiert oder einen neuen Wert hat
+            # Update only changed fields
             for key, value in updated_data.items():
                 if key not in existing_data or existing_data[key] != value:
                     ref.child(key).set(value)
             
             return {
                 'status': 'success',
-                'message': f'Metadaten für {fileID} erfolgreich aktualisiert',
+                'message': f'Metadata for {fileID} successfully updated',
                 'path': f'files/{namespace}/{fileID}'
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Fehler beim Firebase-Upload: {str(e)}'
+                'message': f'Error during Firebase upload: {str(e)}'
             }
     
     def get_document_metadata(self, namespace: str, fileID: str) -> Dict[str, Any]:
         """
-        Ruft die Metadaten eines Dokuments ab.
+        Retrieve metadata for a specific document.
         
         Args:
-            namespace: Der Namespace, in dem das Dokument gespeichert ist
-            fileID: Die ID des Dokuments
+            namespace: Namespace containing the document
+            fileID: Document identifier
             
         Returns:
-            Dict mit den Metadaten oder Fehlermeldung
+            Dict containing document metadata or error information
         """
         try:
             ref = self._db.reference(f'files/{namespace}/{fileID}')
@@ -129,24 +161,24 @@ class FirebaseConnection:
             else:
                 return {
                     'status': 'error',
-                    'message': f'Keine Metadaten für {fileID} gefunden'
+                    'message': f'No metadata found for {fileID}'
                 }
                 
         except Exception as e:
             return {
                 'status': 'error',
-                'message': str(e)
+                'message': f'Error retrieving metadata: {str(e)}'
             }
     
     def list_documents(self, namespace: str = None) -> Dict[str, Any]:
         """
-        Listet alle Dokumente oder Dokumente in einem bestimmten Namespace auf.
+        List all documents or documents in a specific namespace.
         
         Args:
-            namespace: Optionaler Namespace zum Filtern
+            namespace: Optional namespace to filter by
             
         Returns:
-            Dict mit der Liste der Dokumente
+            Dict containing list of documents
         """
         try:
             if namespace:
@@ -158,98 +190,97 @@ class FirebaseConnection:
             
             return {
                 'status': 'success',
-                'data': data
+                'data': data or {}
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': str(e)
+                'message': f'Error listing documents: {str(e)}'
             }
             
     def delete_document_metadata(self, namespace: str, fileID: str) -> Dict[str, Any]:
         """
-        Löscht die Metadaten eines Dokuments aus Firebase.
+        Delete document metadata from Firebase.
         
         Args:
-            namespace: Der Namespace, in dem das Dokument gespeichert ist
-            fileID: Die ID des Dokuments
+            namespace: Namespace containing the document
+            fileID: Document identifier
             
         Returns:
-            Dict mit Statusinformationen
+            Dict containing operation status
         """
         try:
             ref = self._db.reference(f'files/{namespace}/{fileID}')
             
-            # Prüfen, ob das Dokument existiert
+            # Check if document exists
             existing_data = ref.get()
             if not existing_data:
                 return {
                     'status': 'error',
-                    'message': f'Keine Metadaten für {fileID} gefunden'
+                    'message': f'No metadata found for {fileID}'
                 }
                 
-            # Dokument löschen
+            # Delete document
             ref.delete()
             
             return {
                 'status': 'success',
-                'message': f'Metadaten für {fileID} erfolgreich gelöscht',
+                'message': f'Metadata for {fileID} successfully deleted',
                 'path': f'files/{namespace}/{fileID}'
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Fehler beim Löschen der Metadaten: {str(e)}'
+                'message': f'Error deleting metadata: {str(e)}'
             }
             
     def delete_namespace_metadata(self, namespace: str) -> Dict[str, Any]:
         """
-        Löscht alle Metadaten in einem Namespace aus Firebase.
+        Delete all metadata in a namespace from Firebase.
         
         Args:
-            namespace: Der zu löschende Namespace
+            namespace: Namespace to delete
             
         Returns:
-            Dict mit Statusinformationen
+            Dict containing operation status
         """
         try:
             ref = self._db.reference(f'files/{namespace}')
             
-            # Prüfen, ob der Namespace existiert
+            # Check if namespace exists
             existing_data = ref.get()
             if not existing_data:
                 return {
                     'status': 'error',
-                    'message': f'Namespace {namespace} nicht gefunden'
+                    'message': f'Namespace {namespace} not found'
                 }
                 
-            # Namespace löschen
+            # Delete namespace
             ref.delete()
             
             return {
                 'status': 'success',
-                'message': f'Namespace {namespace} erfolgreich gelöscht',
+                'message': f'Namespace {namespace} successfully deleted',
                 'path': f'files/{namespace}'
             }
             
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Fehler beim Löschen des Namespaces: {str(e)}'
+                'message': f'Error deleting namespace: {str(e)}'
             }
 
-            
     def get_namespace_data(self, namespace: str) -> Dict[str, Any]:
         """
-        Ruft alle Daten eines bestimmten Namespaces aus der Firebase-Datenbank ab.
+        Retrieve all data for a specific namespace from Firebase.
         
         Args:
-            namespace: Der Namespace, dessen Daten abgerufen werden sollen
+            namespace: Namespace whose data should be retrieved
             
         Returns:
-            Dict mit den Daten des Namespaces oder Fehlermeldung
+            Dict containing namespace data or error information
         """
         try:
             ref = self._db.reference(f'files/{namespace}')
@@ -264,32 +295,33 @@ class FirebaseConnection:
                 return {
                     'status': 'error',
                     'data': {},
-                    'message': f'Keine Daten für Namespace {namespace} gefunden'
+                    'message': f'No data found for namespace {namespace}'
                 }
                 
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Fehler beim Abrufen der Daten für Namespace {namespace}: {str(e)}'
+                'message': f'Error retrieving data for namespace {namespace}: {str(e)}'
             }
 
     def update_document_status(self, namespace: str, fileID: str, status_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Updates the processing status of a document in Firebase.
+        Update the processing status of a document in Firebase.
         
         Args:
-            namespace: The namespace where the document is stored
-            fileID: The ID of the document
+            namespace: Namespace where the document is stored
+            fileID: Document identifier
             status_data: Dictionary containing status information (processing, progress, status)
             
         Returns:
-            Dict with status information
+            Dict containing operation status
         """
         try:
             ref = self._db.reference(f'files/{namespace}/{fileID}')
             
             existing_data = ref.get() or {}
             
+            # Update with new status data
             for key, value in status_data.items():
                 existing_data[key] = value
                 
@@ -309,28 +341,29 @@ class FirebaseConnection:
 
     def update_namespace_summary(self, namespace: str, bullet_points: List[str]) -> Dict[str, Any]:
         """
-        Stores or updates a list of global summary bullet points for a given namespace.
+        Store or update global summary bullet points for a namespace.
         
         Args:
-            namespace: The namespace to store the summary for.
-            bullet_points: A list of strings, where each string is a bullet point of the global summary.
+            namespace: Namespace to store the summary for
+            bullet_points: List of summary bullet points
             
         Returns:
-            Dict with status information.
+            Dict containing operation status
         """
         try:
             # Path for the global summary of the namespace
             path = f'files/{namespace}/summary' 
             ref = self._db.reference(path)
-            ref.set(bullet_points) # Store the list of bullet points
+            ref.set(bullet_points)  # Store the list of bullet points
+            
             return {
                 'status': 'success',
-                'message': f'Global summary bullet points for namespace {namespace} updated successfully at {path}.',
-                'path': path # ref.path should also work
+                'message': f'Global summary bullet points for namespace {namespace} updated successfully',
+                'path': path
             }
         except Exception as e:
             return {
                 'status': 'error',
-                'message': f'Error updating global namespace summary bullet points: {str(e)}'
+                'message': f'Error updating global namespace summary: {str(e)}'
             }
 

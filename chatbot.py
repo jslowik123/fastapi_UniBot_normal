@@ -5,15 +5,42 @@ import os
 from dotenv import load_dotenv
 from pinecone_connection import PineconeCon
 
+# Load environment variables once at module level
+load_dotenv()
 
-def get_bot():
-    load_dotenv()
+
+def _get_openai_client(streaming: bool = False) -> ChatOpenAI:
+    """
+    Creates and returns a configured OpenAI client.
+    
+    Args:
+        streaming: Whether to enable streaming for real-time responses
+        
+    Returns:
+        ChatOpenAI: Configured language model client
+        
+    Raises:
+        ValueError: If OpenAI API key is not found
+    """
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("OPENAI_API_KEY not found in environment variables")
 
-    llm = ChatOpenAI(model="gpt-4o-mini")
+    return ChatOpenAI(
+        model="gpt-4o-mini",
+        api_key=api_key,
+        streaming=streaming
+    )
 
+
+def get_bot():
+    """
+    Creates and configures the chatbot chain with prompt template.
+    
+    Returns:
+        Chain: Configured LangChain pipeline for the university chatbot
+    """
+    llm = _get_openai_client()
 
     prompt_template = ChatPromptTemplate.from_messages(
         [
@@ -54,36 +81,83 @@ Wichtige Regeln für dein Verhalten:
         ]
     )
 
+    return prompt_template | llm
 
-    chain = prompt_template | llm
-    return chain
+
+def _validate_inputs(user_input, context, knowledge, chat_history):
+    """
+    Validates and sanitizes input parameters for message processing.
+    
+    Args:
+        user_input: User's message
+        context: Document context
+        knowledge: General knowledge context
+        chat_history: Previous conversation history
+        
+    Returns:
+        tuple: Validated and sanitized inputs
+    """
+    if not user_input or not isinstance(user_input, str):
+        raise ValueError("User input must be a non-empty string")
+    
+    if not isinstance(chat_history, list):
+        chat_history = []
+        
+    if not context or not isinstance(context, str):
+        context = ""
+
+    if not knowledge or not isinstance(knowledge, str):
+        knowledge = ""
+        
+    return user_input.strip(), context, knowledge, chat_history
+
+
+def _format_chat_history(chat_history):
+    """
+    Converts chat history to LangChain message format.
+    
+    Args:
+        chat_history: List of chat messages with role and content
+        
+    Returns:
+        list: Formatted chat history for LangChain
+    """
+    formatted_history = []
+    for msg in chat_history:
+        if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
+            continue
+            
+        if msg["role"] == "user":
+            formatted_history.append(HumanMessage(content=msg["content"]))
+        elif msg["role"] == "assistant":
+            formatted_history.append(AIMessage(content=msg["content"]))
+    
+    return formatted_history
+
 
 def message_bot(user_input, context, knowledge, database_overview, document_id, chat_history):
-    try:
-        if not user_input or not isinstance(user_input, str):
-            return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
+    """
+    Processes a user message and returns a response from the chatbot.
+    
+    Args:
+        user_input: The user's question or message
+        context: Relevant document context from vector search
+        knowledge: General knowledge context
+        database_overview: Overview of available documents in the namespace
+        document_id: ID of the document being referenced
+        chat_history: Previous conversation history
         
-        if not isinstance(chat_history, list):
-            chat_history = []
-            
-        if not context or not isinstance(context, str):
-            context = ""
-
-        if not knowledge or not isinstance(knowledge, str):
-            knowledge = ""
-
-        # Convert chat history format
-        formatted_history = []
-        for msg in chat_history:
-            if msg["role"] == "user":
-                formatted_history.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                formatted_history.append(AIMessage(content=msg["content"]))
-
-        # Get bot instance
+    Returns:
+        str: The chatbot's response
+    """
+    try:
+        user_input, context, knowledge, chat_history = _validate_inputs(
+            user_input, context, knowledge, chat_history
+        )
+        
+        formatted_history = _format_chat_history(chat_history)
         chain = get_bot()
         
-        # Invoke chain with validated inputs
         response = chain.invoke({
             "input": user_input,
             "context": context,
@@ -91,58 +165,46 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
             "database_overview": database_overview,
             "document_id": document_id,
             "chat_history": formatted_history,
-            
         })
         
-        # Validate response
         if not response or not hasattr(response, 'content'):
             return "Entschuldigung, ich konnte keine Antwort generieren."
             
-        print("AI:" + response.content)
+        print("AI:", response.content)
         return response.content
         
+    except ValueError as ve:
+        print(f"Validation error in message_bot: {str(ve)}")
+        return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
     except Exception as e:
         print(f"Error in message_bot: {str(e)}")
         return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
+
 def message_bot_stream(user_input, context, knowledge, database_overview, document_id, chat_history):
     """
-    Streaming version of message_bot that yields real-time chunks from OpenAI
+    Streaming version of message_bot that yields real-time response chunks.
+    
+    Args:
+        user_input: The user's question or message
+        context: Relevant document context from vector search  
+        knowledge: General knowledge context
+        database_overview: Overview of available documents in the namespace
+        document_id: ID of the document being referenced
+        chat_history: Previous conversation history
+        
+    Yields:
+        str: Response chunks from the language model
     """
     try:
-        if not user_input or not isinstance(user_input, str):
-            yield "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
-            return
-        
-        if not isinstance(chat_history, list):
-            chat_history = []
-            
-        if not context or not isinstance(context, str):
-            context = ""
-
-        if not knowledge or not isinstance(knowledge, str):
-            knowledge = ""
-
-        # Convert chat history format
-        formatted_history = []
-        for msg in chat_history:
-            if msg["role"] == "user":
-                formatted_history.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                formatted_history.append(AIMessage(content=msg["content"]))
-
-        # Get streaming bot instance
-        load_dotenv()
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            yield "API-Schlüssel nicht gefunden."
-            return
-
-        llm = ChatOpenAI(
-            model="gpt-4o-mini",
-            streaming=True  # Enable streaming
+        user_input, context, knowledge, chat_history = _validate_inputs(
+            user_input, context, knowledge, chat_history
         )
-
+        
+        formatted_history = _format_chat_history(chat_history)
+        
+        # Create streaming LLM and chain
+        llm = _get_openai_client(streaming=True)
         chain = get_bot()
         
         # Stream the response
@@ -157,6 +219,8 @@ def message_bot_stream(user_input, context, knowledge, database_overview, docume
             if hasattr(chunk, 'content') and chunk.content:
                 yield chunk.content
         
+    except ValueError:
+        yield "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
     except Exception as e:
         print(f"Error in message_bot_stream: {str(e)}")
         yield "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
