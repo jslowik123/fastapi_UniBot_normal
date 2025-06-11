@@ -96,7 +96,7 @@ async def root():
 
 
 @app.post("/upload")
-async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...)):
+async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...), additionalInfo: str = Form(...)):
     """
     Upload and process a PDF document asynchronously.
     
