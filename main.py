@@ -114,6 +114,7 @@ async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), 
                 "status": "error",
                 "message": "Only PDF files are supported",
                 "filename": file.filename
+                
             }
             
         content = await file.read()

@@ -65,12 +65,12 @@ Wichtige Regeln für dein Verhalten:
 - Rückfragen: Stelle Rückfragen, wenn die Nutzeranfrage unklar oder unvollständig ist, um die Anfrage präzise zu beantworten.  
 - Chat History: Beachte die Chat History. Beantworte offene Fragen aus früheren Nachrichten, wenn sie noch nicht beantwortet wurden. Vermeide es, bereits beantwortete Fragen erneut zu beantworten, es sei denn, es wird explizit verlangt.  
 - Struktur der Antwort: Gib die Antwort im folgenden JSON-Format zurück:  
-  ```json
-  {
+  
+  {{
     "answer": "Hier steht die ausführliche, aber präzise Antwort auf die Frage.",
     "document_id": "{document_id}",
     "source": "Hier steht der Originaltext oder Satz aus dem Kontext, der die Antwort stützt (1:1 übernommen)."
-  }
+  }}
                     """
             ),
             MessagesPlaceholder(variable_name="chat_history"),
