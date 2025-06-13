@@ -131,21 +131,21 @@ class DocProcessor:
         Process extracted text by cleaning, chunking, and storing in databases.
         
         Args:
-            text: Raw text extracted from PDF
-            namespace: Namespace for organizing documents
-            fileID: Unique identifier for the document  
+            text: Raw extracted text
+            namespace: Pinecone namespace
+            fileID: Document identifier
             file_name: Original filename
             
         Returns:
             Dict containing processing results
         """
         try:
-            cleaned_text, keywords, summary, structured_sections = self._recondition_text(text)
-            chunks = self._split_text(cleaned_text)
+            keywords, summary = self._extract_keywords_and_summary(text)
+            chunks = self._split_text(text)
             
             pinecone_result = self._con.upload(chunks, namespace, file_name, fileID=fileID)
 
-            firebase_result = self._store_metadata(namespace, fileID, len(chunks), keywords, summary, structured_sections)
+            firebase_result = self._store_metadata(namespace, fileID, len(chunks), keywords, summary)
             
             return {
                 "status": "success",
@@ -153,8 +153,7 @@ class DocProcessor:
                 "chunks": len(chunks),
                 "pinecone_result": pinecone_result,
                 "firebase_result": firebase_result,
-                "original_file": file_name,
-                "structured_sections": structured_sections
+                "original_file": file_name
             }
             
         except Exception as e:
@@ -164,7 +163,7 @@ class DocProcessor:
             }
     
     def _store_metadata(self, namespace: str, fileID: str, chunk_count: int, 
-                       keywords: List[str], summary: str, structured_sections: List[Dict[str, str]]) -> Dict[str, Any]:
+                       keywords: List[str], summary: str) -> Dict[str, Any]:
         """
         Store document metadata in Firebase if available.
         
@@ -174,7 +173,6 @@ class DocProcessor:
             chunk_count: Number of text chunks created
             keywords: Extracted keywords
             summary: Document summary
-            structured_sections: List of structured sections
             
         Returns:
             Dict with storage result status
@@ -185,8 +183,7 @@ class DocProcessor:
                 fileID=fileID,
                 chunk_count=chunk_count,
                 keywords=keywords,
-                summary=summary,
-                structured_sections=structured_sections
+                summary=summary
             )
         else:
             return {
@@ -194,7 +191,7 @@ class DocProcessor:
                 'message': 'Firebase nicht verfügbar'
             }
     
-    def _recondition_text(self, text: str) -> Tuple[str, List[str], str, List[Dict[str, str]]]:
+    def _extract_keywords_and_summary(self, text: str) -> Tuple[str, List[str], str]:
         """
         Clean text and extract keywords and summary using OpenAI.
         
@@ -217,26 +214,11 @@ class DocProcessor:
             
         prompt = {
             "role": "system", 
-            "content": """Du bist ein Assistent zur Textbereinigung und Strukturierung. Du erhältst einen Text aus einem PDF und sollst vier Aufgaben erfüllen:
+            "content": """Du bist ein Assistent zur Textbereinigung und Inhaltsanalyse. Du erhältst einen Text aus einem PDF und sollst drei Aufgaben erfüllen:
+            1) Die wichtigsten Schlagwörter und Themen aus dem Text extrahieren. Die Keywords sollen nicht mehr als 3 Wörter lang sein.
+            2) Eine kurze Zusammenfassung des Dokuments in 3-5 Sätzen erstellen.
 
-1) Den Text bereinigen und gut formatieren (überflüssige Zeilenumbrüche entfernen, Formatierungsfehler korrigieren)
-2) Den Text in logische Abschnitte unterteilen und passende Überschriften für jeden Abschnitt erstellen
-3) Die wichtigsten Schlagwörter und Themen aus dem gesamten Text extrahieren (max. 3 Wörter pro Keyword)
-4) Eine kurze Zusammenfassung des gesamten Dokuments in 3-5 Sätzen erstellen
-
-Strukturiere den Text in Abschnitte mit aussagekräftigen Überschriften. Jeder Abschnitt sollte thematisch zusammengehörigen Inhalt haben.
-Dabei soll zu jeder Überschrift auch der gesamte Inhalt 1zu1 zurück gegeben werden. Der Gesamte Input text soll also wieder zurück kommen.
-Gib das Ergebnis als JSON zurück mit folgender Struktur:
-{
-  "structured_sections": [
-    {
-      "title": "Überschrift des Abschnitts",
-      "content": "Vollständiger Inhalt des Abschnitts"
-    }
-  ],
-  "keywords": ["keyword1", "keyword2", ...],
-  "summary": "Kurze Zusammenfassung des gesamten Dokuments"
-}"""
+            Gib das Ergebnis als JSON mit den Feldern 'keywords' und 'summary' zurück."""
         }
         
         user_message = {
@@ -253,34 +235,14 @@ Gib das Ergebnis als JSON zurück mit folgender Struktur:
             )
             
             result = json.loads(response.choices[0].message.content)
-            
-            # Extract structured sections and combine them back to text for compatibility
-            structured_sections = result.get("structured_sections", [])
-            if structured_sections:
-                # Combine all sections into one text for backward compatibility
-                cleaned_text_parts = []
-                for section in structured_sections:
-                    title = section.get("title", "")
-                    content = section.get("content", "")
-                    if title and content:
-                        cleaned_text_parts.append(f"## {title}\n\n{content}")
-                    elif content:
-                        cleaned_text_parts.append(content)
-                
-                cleaned_text = "\n\n".join(cleaned_text_parts)
-            else:
-                cleaned_text = result.get("cleaned_text", text)
-            
             return (
-                cleaned_text,
                 result.get("keywords", []), 
-                result.get("summary", ""),
-                structured_sections  # Return structured sections as additional data
+                result.get("summary", "")
             )
         except (json.JSONDecodeError, Exception) as e:
             print(f"Error in text reconditioning: {str(e)}")
             # Fallback: return original text with empty metadata
-            return text, [], "", []
+            return text, [], ""
 
     def _split_text(self, text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
         """

@@ -90,7 +90,7 @@ class FirebaseConnection:
             })
 
     def append_metadata(self, namespace: str, fileID: str, chunk_count: int, 
-                       keywords: List[str], summary: str, structured_sections: List[Dict[str, str]] = None) -> Dict[str, Any]:
+                       keywords: List[str], summary: str) -> Dict[str, Any]:
         """
         Store or update document metadata in Firebase.
         
@@ -100,7 +100,6 @@ class FirebaseConnection:
             chunk_count: Number of text chunks created
             keywords: List of extracted keywords
             summary: Document summary
-            structured_sections: Optional list of structured sections with titles and content
             
         Returns:
             Dict containing operation status and information
@@ -122,10 +121,6 @@ class FirebaseConnection:
                 'summary': summary,
             }
             
-            # Add structured sections if provided
-            if structured_sections:
-                updated_data['structured_sections'] = structured_sections
-            
             # Update only changed fields
             for key, value in updated_data.items():
                 if key not in existing_data or existing_data[key] != value:
@@ -134,8 +129,7 @@ class FirebaseConnection:
             return {
                 'status': 'success',
                 'message': f'Metadata for {fileID} successfully updated',
-                'path': f'files/{namespace}/{fileID}',
-                'sections_count': len(structured_sections) if structured_sections else 0
+                'path': f'files/{namespace}/{fileID}'
             }
             
         except Exception as e:
