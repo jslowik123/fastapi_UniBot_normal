@@ -191,30 +191,29 @@ class DocProcessor:
                 'message': 'Firebase nicht verfügbar'
             }
     
-    def _extract_keywords_and_summary(self, text: str) -> Tuple[str, List[str], str]:
+    def _extract_keywords_and_summary(self, text: str) -> Tuple[List[str], str]:
         """
-        Clean text and extract keywords and summary using OpenAI.
+        Extract keywords and summary using OpenAI.
         
         This method uses AI to:
-        1. Clean and format the text (fix line breaks, formatting errors)
-        2. Extract relevant keywords and topics (max 3 words each)
-        3. Generate a concise summary (3-5 sentences)
+        1. Extract relevant keywords and topics (max 3 words each)
+        2. Generate a concise summary (3-5 sentences)
         
         Args:
             text: Raw text extracted from PDF
             
         Returns:
-            Tuple containing (cleaned_text, keywords_list, summary)
+            Tuple containing (keywords_list, summary)
             
         Raises:
             Exception: If OpenAI API call fails or returns invalid JSON
         """
         if not text or not text.strip():
-            return "", [], ""
+            return [], ""
             
         prompt = {
             "role": "system", 
-            "content": """Du bist ein Assistent zur Textbereinigung und Inhaltsanalyse. Du erhältst einen Text aus einem PDF und sollst drei Aufgaben erfüllen:
+            "content": """Du bist ein Assistent zur Textbereinigung und Inhaltsanalyse. Du erhältst einen Text aus einem PDF und sollst zwei Aufgaben erfüllen:
             1) Die wichtigsten Schlagwörter und Themen aus dem Text extrahieren. Die Keywords sollen nicht mehr als 3 Wörter lang sein.
             2) Eine kurze Zusammenfassung des Dokuments in 3-5 Sätzen erstellen.
 
@@ -223,7 +222,7 @@ class DocProcessor:
         
         user_message = {
             "role": "user",
-            "content": f"Hier ist der Text aus einem PDF. Bitte bereinige den Text, extrahiere die Schlagwörter/Themen und erstelle eine kurze Zusammenfassung:\n\n{text}"
+            "content": f"Hier ist der Text aus einem PDF. Bitte extrahiere die Schlagwörter/Themen und erstelle eine kurze Zusammenfassung:\n\n{text}"
         }
         
         try:
@@ -240,9 +239,9 @@ class DocProcessor:
                 result.get("summary", "")
             )
         except (json.JSONDecodeError, Exception) as e:
-            print(f"Error in text reconditioning: {str(e)}")
-            # Fallback: return original text with empty metadata
-            return text, [], ""
+            print(f"Error in keywords extraction: {str(e)}")
+            # Fallback: return empty metadata
+            return [], ""
 
     def _split_text(self, text: str, chunk_size: int = DEFAULT_CHUNK_SIZE) -> List[str]:
         """
