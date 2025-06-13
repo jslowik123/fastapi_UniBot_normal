@@ -225,13 +225,13 @@ class DocProcessor:
 4) Eine kurze Zusammenfassung des gesamten Dokuments in 3-5 Sätzen erstellen
 
 Strukturiere den Text in Abschnitte mit aussagekräftigen Überschriften. Jeder Abschnitt sollte thematisch zusammengehörigen Inhalt haben.
-
+Dabei soll zu jeder Überschrift auch der gesamte Inhalt 1zu1 zurück gegeben werden. Der Gesamte Input text soll also wieder zurück kommen.
 Gib das Ergebnis als JSON zurück mit folgender Struktur:
 {
   "structured_sections": [
     {
       "title": "Überschrift des Abschnitts",
-      "content": "Bereinigter Inhalt des Abschnitts"
+      "content": "Vollständiger Inhalt des Abschnitts"
     }
   ],
   "keywords": ["keyword1", "keyword2", ...],
