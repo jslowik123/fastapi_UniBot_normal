@@ -2,6 +2,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 import os
+import json
 from dotenv import load_dotenv
 from pinecone_connection import PineconeCon
 
@@ -33,6 +34,26 @@ def _get_openai_client(streaming: bool = False) -> ChatOpenAI:
     )
 
 
+def _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history):
+    """
+    Logs all parameters that are being passed to the prompt for debugging.
+    """
+    print("\n" + "="*80)
+    print("DEBUG: Parameter für den Systemprompt:")
+    print("="*80)
+    print(f"USER INPUT: {user_input}")
+    print(f"DOCUMENT ID: {document_id}")
+    print(f"CONTEXT LENGTH: {len(context) if context else 0} Zeichen")
+    print(f"CONTEXT PREVIEW: {context[:200] if context else 'Kein Context'}...")
+    print(f"KNOWLEDGE LENGTH: {len(knowledge) if knowledge else 0} Zeichen")
+    print(f"KNOWLEDGE PREVIEW: {knowledge[:200] if knowledge else 'Kein Knowledge'}...")
+    print(f"DATABASE OVERVIEW LENGTH: {len(database_overview) if database_overview else 0} Zeichen")
+    print(f"DATABASE OVERVIEW PREVIEW: {database_overview[:200] if database_overview else 'Kein Database Overview'}...")
+    print(f"CHAT HISTORY LÄNGE: {len(chat_history) if chat_history else 0} Nachrichten")
+    print("="*80)
+    print("\n")
+
+
 def get_bot():
     """
     Creates and configures the chatbot chain with prompt template.
@@ -46,18 +67,24 @@ def get_bot():
         [
             (
                 "system",
-                """Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität. Deine Antworten basieren ausschließlich auf zwei Quellen:  
-1. Allgemeines Wissen: {knowledge}  
-2. Hochschulspezifische Informationen: Modulhandbücher, Studien- und Prüfungsordnungen, Ablaufpläne oder interne Regelungen der Universität. → {context}  
+                """Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität. Deine Antworten basieren ausschließlich auf folgenden Quellen:  
 
-Dokumenten-ID:  
+HOCHSCHULSPEZIFISCHE INFORMATIONEN:
+Modulhandbücher, Studien- und Prüfungsordnungen, Ablaufpläne oder interne Regelungen der Universität:
+{context}
+
+ZUSÄTZLICHES WISSEN:
+{knowledge}
+
+VERFÜGBARE DOKUMENTE:
+Übersicht der verfügbaren Dokumente in der Datenbank:
+{database_overview}
+
+DOKUMENTEN-ID:  
 Die Dokumenten-ID ({document_id}) übernimmst du exakt 1:1 in das Feld `document_id` deiner Antwort.  
 
-Datenbankübersicht:  
-Du hast Zugriff auf eine Datenbank mit hochschulspezifischen Informationen: {database_overview}  
-
 Wichtige Regeln für dein Verhalten:  
-- Antwortgrundlage: Stütze deine Antworten ausschließlich auf die bereitgestellten Quellen (allgemeines und spezifisches Wissen). Erfinde keine Inhalte und spekuliere nicht.  
+- Antwortgrundlage: Stütze deine Antworten ausschließlich auf die bereitgestellten Quellen. Erfinde keine Inhalte und spekuliere nicht. Nutze alle verfügbaren Informationen aus Context, Knowledge und der Dokumentübersicht.
 - Natürlicher Ton: Antworte so natürlich und flüssig wie möglich, als würdest du direkt mit einem Studierenden oder Mitarbeitenden der Universität sprechen. Erwähne keine internen Prozesse wie hochgeladene Dokumente, Datenbanken oder Quellenverarbeitung, um die Kommunikation nutzerfreundlich zu halten.  
 - Widersprüche: Wenn sich allgemeines und spezifisches Wissen widersprechen, weise höflich darauf hin und beziehe dich auf die hochschulspezifischen Informationen, ohne Annahmen zu treffen.  
 - Fehlende Informationen: Wenn die Quellen keine ausreichenden Informationen enthalten, teile dies freundlich und klar mit und biete an, bei einer genaueren Anfrage weiterzuhelfen.  
@@ -155,22 +182,37 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
             user_input, context, knowledge, chat_history
         )
         
+        # Debug logging hinzugefügt
+        _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history)
+        
         formatted_history = _format_chat_history(chat_history)
         chain = get_bot()
         
-        response = chain.invoke({
+        # Debug: Zeige welche Parameter tatsächlich an den Chain weitergegeben werden
+        chain_params = {
             "input": user_input,
             "context": context,
             "knowledge": knowledge,
             "database_overview": database_overview,
             "document_id": document_id,
             "chat_history": formatted_history,
-        })
+        }
+        
+        print("CHAIN PARAMETER:")
+        print(f"Input: {chain_params['input']}")
+        print(f"Context (erste 300 Zeichen): {chain_params['context'][:300] if chain_params['context'] else 'LEER'}...")
+        print(f"Knowledge (erste 200 Zeichen): {chain_params['knowledge'][:200] if chain_params['knowledge'] else 'LEER'}...")
+        print(f"Database Overview (erste 200 Zeichen): {str(chain_params['database_overview'])[:200] if chain_params['database_overview'] else 'LEER'}...")
+        print(f"Document ID: {chain_params['document_id']}")
+        print(f"Chat History Länge: {len(chain_params['chat_history'])}")
+        print("\n")
+        
+        response = chain.invoke(chain_params)
         
         if not response or not hasattr(response, 'content'):
             return "Entschuldigung, ich konnte keine Antwort generieren."
             
-        print("AI:", response.content)
+        print("AI RESPONSE:", response.content)
         return response.content
         
     except ValueError as ve:
@@ -201,21 +243,36 @@ def message_bot_stream(user_input, context, knowledge, database_overview, docume
             user_input, context, knowledge, chat_history
         )
         
+        # Debug logging hinzugefügt
+        _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history)
+        
         formatted_history = _format_chat_history(chat_history)
         
         # Create streaming LLM and chain
         llm = _get_openai_client(streaming=True)
         chain = get_bot()
         
-        # Stream the response
-        for chunk in chain.stream({
+        # Debug: Zeige welche Parameter tatsächlich an den Chain weitergegeben werden
+        chain_params = {
             "input": user_input,
             "context": context,
             "knowledge": knowledge,
             "database_overview": database_overview,
             "document_id": document_id,
             "chat_history": formatted_history,
-        }):
+        }
+        
+        print("STREAM CHAIN PARAMETER:")
+        print(f"Input: {chain_params['input']}")
+        print(f"Context (erste 300 Zeichen): {chain_params['context'][:300] if chain_params['context'] else 'LEER'}...")
+        print(f"Knowledge (erste 200 Zeichen): {chain_params['knowledge'][:200] if chain_params['knowledge'] else 'LEER'}...")
+        print(f"Database Overview (erste 200 Zeichen): {str(chain_params['database_overview'])[:200] if chain_params['database_overview'] else 'LEER'}...")
+        print(f"Document ID: {chain_params['document_id']}")
+        print(f"Chat History Länge: {len(chain_params['chat_history'])}")
+        print("\n")
+        
+        # Stream the response
+        for chunk in chain.stream(chain_params):
             if hasattr(chunk, 'content') and chunk.content:
                 yield chunk.content
         

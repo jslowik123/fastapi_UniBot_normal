@@ -316,7 +316,7 @@ class DocProcessor:
                         'name': doc_data.get('name', 'Unknown'),
                         'keywords': doc_data.get('keywords', []),
                         'summary': doc_data.get('summary', ''),
-                        'chunk_count': doc_data.get('chunk_count', 0)
+                        'additional_info': doc_data.get('additional_info', '')
                     }
                     extracted_data.append(doc_info)
                     
@@ -351,11 +351,9 @@ class DocProcessor:
             prompt = {
                 "role": "system", 
                 "content": """Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. 
-
-Antworte im JSON-Format mit genau diesem Schema: {"id": "document_id"}. 
-Verwende keine anderen Felder und füge keine Erklärungen hinzu.
-
-Analysiere die Keywords und Zusammenfassungen der Dokumente und wähle das relevanteste für die Nutzeranfrage aus."""
+                Antworte im JSON-Format mit genau diesem Schema: {"id": "document_id"}. 
+                Verwende keine anderen Felder und füge keine Erklärungen hinzu.
+                Analysiere die Keywords und Zusammenfassungen der Dokumente und wähle das relevanteste für die Nutzeranfrage aus. Beachte dabei die vom Nutzer zu den jewiligen Dokumenten hinzugefügten Infos. Wenn du kein passendes Dokument findest, antworte mit {"id": "no_document_found"}."""
             }
                 
             user_message = {
