@@ -28,30 +28,76 @@ def _get_openai_client(streaming: bool = False) -> ChatOpenAI:
         raise ValueError("OPENAI_API_KEY not found in environment variables")
 
     return ChatOpenAI(
-        model="gpt-4o-mini",
+        model="gpt-4.1-mini",
         api_key=api_key,
         streaming=streaming
     )
 
+def _create_context_aware_prompt(has_chat_history=False):
+    """
+    Creates a context-aware prompt template that emphasizes chat history when present.
+    
+    Args:
+        has_chat_history: Whether chat history is present
+        
+    Returns:
+        ChatPromptTemplate: Configured prompt template
+    """
+    base_system_prompt = """Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität."""
+    
+    if has_chat_history:
+        chat_history_emphasis = """
 
-def _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history):
-    """
-    Logs all parameters that are being passed to the prompt for debugging.
-    """
-    print("\n" + "="*80)
-    print("DEBUG: Parameter für den Systemprompt:")
-    print("="*80)
-    print(f"USER INPUT: {user_input}")
-    print(f"DOCUMENT ID: {document_id}")
-    print(f"CONTEXT LENGTH: {len(context) if context else 0} Zeichen")
-    print(f"CONTEXT PREVIEW: {context[:200] if context else 'Kein Context'}...")
-    print(f"KNOWLEDGE LENGTH: {len(knowledge) if knowledge else 0} Zeichen")
-    print(f"KNOWLEDGE PREVIEW: {knowledge[:200] if knowledge else 'Kein Knowledge'}...")
-    print(f"DATABASE OVERVIEW LENGTH: {len(database_overview) if database_overview else 0} Zeichen")
-    print(f"DATABASE OVERVIEW PREVIEW: {database_overview[:200] if database_overview else 'Kein Database Overview'}...")
-    print(f"CHAT HISTORY LÄNGE: {len(chat_history) if chat_history else 0} Nachrichten")
-    print("="*80)
-    print("\n")
+🔄 CHAT HISTORY BEACHTUNG - WICHTIG:
+Du siehst eine Chat History mit vorherigen Nachrichten. BERÜCKSICHTIGE diese aktiv:
+- Beziehe dich auf vorherige Fragen und Antworten
+- Nutze den Kontext aus früheren Nachrichten
+- Wenn der Nutzer "dazu", "darüber", "das" oder ähnliche Bezugswörter verwendet, beziehe dich auf vorherige Themen
+- Beantworte Rückfragen oder Nachfragen basierend auf dem bisherigen Gesprächsverlauf
+- Vermeide Wiederholungen bereits gegebener Antworten, es sei denn, es wird explizit verlangt
+- Erkenne den Kontext der aktuellen Frage im Zusammenhang mit der Chat History"""
+    else:
+        chat_history_emphasis = """
+
+📝 NEUE UNTERHALTUNG:
+Dies ist der Beginn einer neuen Unterhaltung ohne vorherige Chat History."""
+
+    sources_section = """
+
+DEINE ANTWORTQUELLEN:
+Diese Informationen stehen dir zur Verfügung:
+
+HOCHSCHULSPEZIFISCHE INFORMATIONEN:
+{context}
+
+ZUSÄTZLICHES WISSEN:
+{knowledge}
+
+DOKUMENTEN-ID: {document_id}
+
+VERHALTEN:
+- Stütze deine Antworten auf die bereitgestellten Quellen
+- Antworte natürlich und direkt, als würdest du mit Studierenden sprechen
+- Bei Widersprüchen: Bevorzuge hochschulspezifische Informationen
+- Bei fehlenden Informationen: Sage es klar und biete Hilfe an
+- Gib ausführliche, aber präzise Antworten
+
+ANTWORTFORMAT:
+{{
+  "answer": "Deine ausführliche Antwort hier",
+  "document_id": "{document_id}",
+  "source": "Originaltext aus dem Kontext, der die Antwort stützt"
+}}"""
+
+    full_system_prompt = base_system_prompt + chat_history_emphasis + sources_section
+
+    return ChatPromptTemplate.from_messages(
+        [
+            ("system", full_system_prompt),
+            MessagesPlaceholder(variable_name="chat_history"),
+            ("human", "{input}"),
+        ]
+    )
 
 
 def get_bot():
@@ -62,52 +108,8 @@ def get_bot():
         Chain: Configured LangChain pipeline for the university chatbot
     """
     llm = _get_openai_client()
-
-    prompt_template = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                """Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität. Deine Antworten basieren ausschließlich auf folgenden Quellen:  
-
-HOCHSCHULSPEZIFISCHE INFORMATIONEN:
-Modulhandbücher, Studien- und Prüfungsordnungen, Ablaufpläne oder interne Regelungen der Universität:
-{context}
-
-ZUSÄTZLICHES WISSEN:
-{knowledge}
-
-VERFÜGBARE DOKUMENTE:
-Übersicht der verfügbaren Dokumente in der Datenbank:
-{database_overview}
-
-DOKUMENTEN-ID:  
-Die Dokumenten-ID ({document_id}) übernimmst du exakt 1:1 in das Feld `document_id` deiner Antwort.  
-
-Wichtige Regeln für dein Verhalten:  
-- Antwortgrundlage: Stütze deine Antworten ausschließlich auf die bereitgestellten Quellen. Erfinde keine Inhalte und spekuliere nicht. Nutze alle verfügbaren Informationen aus Context, Knowledge und der Dokumentübersicht.
-- Natürlicher Ton: Antworte so natürlich und flüssig wie möglich, als würdest du direkt mit einem Studierenden oder Mitarbeitenden der Universität sprechen. Erwähne keine internen Prozesse wie hochgeladene Dokumente, Datenbanken oder Quellenverarbeitung, um die Kommunikation nutzerfreundlich zu halten.  
-- Widersprüche: Wenn sich allgemeines und spezifisches Wissen widersprechen, weise höflich darauf hin und beziehe dich auf die hochschulspezifischen Informationen, ohne Annahmen zu treffen.  
-- Fehlende Informationen: Wenn die Quellen keine ausreichenden Informationen enthalten, teile dies freundlich und klar mit und biete an, bei einer genaueren Anfrage weiterzuhelfen.  
-- Antwortstil: Antworte klar, professionell und verständlich. Gib ausführliche, aber präzise Antworten, die die Frage umfassend beantworten, ohne überflüssige Details. Vermeide zu kurze Antworten (z. B. nur vier Wörter auf ausführliche Fragen).  
-- Rückfragen: Stelle Rückfragen, wenn die Nutzeranfrage unklar oder unvollständig ist, um die Anfrage präzise zu beantworten.  
-- Chat History: Beachte die Chat History. Beantworte offene Fragen aus früheren Nachrichten, wenn sie noch nicht beantwortet wurden. Vermeide es, bereits beantwortete Fragen erneut zu beantworten, es sei denn, es wird explizit verlangt.  
-- Struktur der Antwort: Gib die Antwort im folgenden JSON-Format zurück:  
-  
-  {{
-    "answer": "Hier steht die ausführliche, aber präzise Antwort auf die Frage.",
-    "document_id": "{document_id}",
-    "source": "Hier steht der Originaltext oder Satz aus dem Kontext, der die Antwort stützt (1:1 übernommen)."
-  }}
-                    """
-            ),
-            MessagesPlaceholder(variable_name="chat_history"),
-            (
-                "human",
-                "{input}",
-            ),
-        ]
-    )
-
+    # Use default prompt (this will be overridden in message functions with context-aware prompt)
+    prompt_template = _create_context_aware_prompt(has_chat_history=False)
     return prompt_template | llm
 
 
@@ -170,7 +172,6 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
         user_input: The user's question or message
         context: Relevant document context from vector search
         knowledge: General knowledge context
-        database_overview: Overview of available documents in the namespace
         document_id: ID of the document being referenced
         chat_history: Previous conversation history
         
@@ -182,18 +183,18 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
             user_input, context, knowledge, chat_history
         )
         
-        # Debug logging hinzugefügt
-        _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history)
-        
         formatted_history = _format_chat_history(chat_history)
-        chain = get_bot()
+        
+        # Create context-aware chain that emphasizes chat history when present
+        llm = _get_openai_client()
+        prompt_template = _create_context_aware_prompt(bool(chat_history))
+        chain = prompt_template | llm
         
         # Debug: Zeige welche Parameter tatsächlich an den Chain weitergegeben werden
         chain_params = {
             "input": user_input,
             "context": context,
             "knowledge": knowledge,
-            "database_overview": database_overview,
             "document_id": document_id,
             "chat_history": formatted_history,
         }
@@ -202,7 +203,6 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
         print(f"Input: {chain_params['input']}")
         print(f"Context (erste 300 Zeichen): {chain_params['context'][:300] if chain_params['context'] else 'LEER'}...")
         print(f"Knowledge (erste 200 Zeichen): {chain_params['knowledge'][:200] if chain_params['knowledge'] else 'LEER'}...")
-        print(f"Database Overview (erste 200 Zeichen): {str(chain_params['database_overview'])[:200] if chain_params['database_overview'] else 'LEER'}...")
         print(f"Document ID: {chain_params['document_id']}")
         print(f"Chat History Länge: {len(chain_params['chat_history'])}")
         print("\n")
@@ -231,7 +231,6 @@ def message_bot_stream(user_input, context, knowledge, database_overview, docume
         user_input: The user's question or message
         context: Relevant document context from vector search  
         knowledge: General knowledge context
-        database_overview: Overview of available documents in the namespace
         document_id: ID of the document being referenced
         chat_history: Previous conversation history
         
@@ -243,33 +242,22 @@ def message_bot_stream(user_input, context, knowledge, database_overview, docume
             user_input, context, knowledge, chat_history
         )
         
-        # Debug logging hinzugefügt
-        _log_prompt_parameters(user_input, context, knowledge, database_overview, document_id, chat_history)
-        
         formatted_history = _format_chat_history(chat_history)
         
-        # Create streaming LLM and chain
+        # Create streaming LLM and chain with context-aware prompt
         llm = _get_openai_client(streaming=True)
-        chain = get_bot()
+        prompt_template = _create_context_aware_prompt(bool(chat_history))
+        
+        chain = prompt_template | llm
         
         # Debug: Zeige welche Parameter tatsächlich an den Chain weitergegeben werden
         chain_params = {
             "input": user_input,
             "context": context,
             "knowledge": knowledge,
-            "database_overview": database_overview,
             "document_id": document_id,
             "chat_history": formatted_history,
         }
-        
-        print("STREAM CHAIN PARAMETER:")
-        print(f"Input: {chain_params['input']}")
-        print(f"Context (erste 300 Zeichen): {chain_params['context'][:300] if chain_params['context'] else 'LEER'}...")
-        print(f"Knowledge (erste 200 Zeichen): {chain_params['knowledge'][:200] if chain_params['knowledge'] else 'LEER'}...")
-        print(f"Database Overview (erste 200 Zeichen): {str(chain_params['database_overview'])[:200] if chain_params['database_overview'] else 'LEER'}...")
-        print(f"Document ID: {chain_params['document_id']}")
-        print(f"Chat History Länge: {len(chain_params['chat_history'])}")
-        print("\n")
         
         # Stream the response
         for chunk in chain.stream(chain_params):
