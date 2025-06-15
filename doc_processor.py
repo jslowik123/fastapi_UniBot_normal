@@ -342,7 +342,7 @@ class DocProcessor:
             return []
 
     def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], 
-                                  user_query: str) -> Dict[str, Any]:
+                                  user_query: str, history: list) -> Dict[str, Any]:
         """
         Find the most appropriate document to answer a user's query.
         
@@ -369,12 +369,16 @@ class DocProcessor:
                 "content": """Du bist ein Assistent, der verschiedene Informationen über Dokumente bekommt. Du sollst entscheiden welches Dokument am besten passt um eine Frage des Nutzers zu beantworten. 
                 Antworte im JSON-Format mit genau diesem Schema: {"id": "document_id"}. 
                 Verwende keine anderen Felder und füge keine Erklärungen hinzu.
-                Analysiere die Keywords und Zusammenfassungen der Dokumente und wähle das relevanteste für die Nutzeranfrage aus. Beachte dabei die vom Nutzer zu den jewiligen Dokumenten hinzugefügten Infos. Wenn du kein passendes Dokument findest, antworte mit {"id": "no_document_found"}."""
+                Analysiere die Keywords und Zusammenfassungen der Dokumente und wähle das relevanteste für die Nutzeranfrage aus. 
+                Beachte dabei die vom Nutzer zu den jewiligen Dokumenten hinzugefügten Infos.
+                Bachte die beigefügte Chat History des Nutzers, wenn deiner Meinung nach keine weiteren Informationen benötigt werden aus den Dokumente, sondenr einfahc nur weiterführende Fragen gestellt wurden,
+                dann antworte mit {"id": "no_document_found"}.
+                Wenn du kein passendes Dokument findest, antworte mit {"id": "no_document_found"}."""
             }
                 
             user_message = {
                 "role": "user",
-                "content": f"Hier sind die verfügbaren Dokumente:\n\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}\n\nDie Frage des Users lautet: {user_query}\n\nWelches Dokument ist am besten geeignet?"
+                "content": f"Hier sind die verfügbaren Dokumente:\n\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}\n\nDie Frage des Users lautet: {user_query}\n\nDie Chat History des Users lautet: {history}\n\nWelches Dokument ist am besten geeignet? \n\n"
             }
                 
             response = self._openai.chat.completions.create(
