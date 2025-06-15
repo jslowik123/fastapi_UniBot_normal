@@ -81,6 +81,7 @@ VERHALTEN:
 - Bei Widersprüchen: Bevorzuge hochschulspezifische Informationen
 - Bei fehlenden Informationen: Sage es klar und biete Hilfe an
 - Gib ausführliche, aber präzise Antworten
+- Verwende innerhalb der "answer" kein "" sondern nur ''
 
 ANTWORTFORMAT:
 {{
