@@ -341,8 +341,7 @@ class DocProcessor:
             print(f"Error retrieving namespace data: {str(e)}")
             return []
 
-    def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], 
-                                  user_query: str, history: list) -> Dict[str, Any]:
+    def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], user_query: str, history: list) -> Dict[str, Any]:
         """
         Find the most appropriate document to answer a user's query.
         

@@ -2,20 +2,16 @@ from fastapi import FastAPI, UploadFile, Form, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 import pinecone
-import PyPDF2
 from dotenv import load_dotenv
 import os
 import uvicorn
 from pinecone_connection import PineconeCon
 from chatbot import get_bot, message_bot, message_bot_stream
 from doc_processor import DocProcessor
-import tempfile
 from firebase_connection import FirebaseConnection
-from openai_agent import UniversityAgent
 from celery_app import test_task, celery
 from tasks import process_document
 from redis import Redis
-import time
 import json
 import asyncio
 from celery.exceptions import Ignore
@@ -233,7 +229,7 @@ async def start_agent():
         }
 
 
-def _get_relevant_context(user_input: str, namespace: str) -> tuple:
+def _get_relevant_context(user_input: str, namespace: str, history: list) -> tuple:
     """
     Get relevant context for a user query from document database.
     
@@ -251,7 +247,7 @@ def _get_relevant_context(user_input: str, namespace: str) -> tuple:
         
     # Find appropriate document
     appropriate_document = doc_processor.appropriate_document_search(
-        namespace, database_overview, user_input
+        namespace=namespace, extracted_data=database_overview, user_query=user_input, history=history,
     )
     
     if not appropriate_document or "id" not in appropriate_document:
@@ -277,72 +273,6 @@ def _get_relevant_context(user_input: str, namespace: str) -> tuple:
     context = "\n".join(context_parts)
     return context, database_overview, appropriate_document["id"], None
 
-
-@app.post("/send_message")
-async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
-    """
-    Process a user message and return a chatbot response.
-    
-    Args:
-        user_input: User's question or message
-        namespace: Namespace to search for relevant documents
-        
-    Returns:
-        Dict containing chatbot response or error information
-    """
-    if not chat_state.chain:
-        return {
-            "status": "error", 
-            "message": "Bot not started. Please call /start_bot first"
-        }
-    
-    try:
-        context, database_overview, document_id, error = _get_relevant_context(user_input, namespace)
-        
-        if error:
-            return {"status": "error", "message": error}
-        
-        response = message_bot(
-            user_input, context, "", database_overview, 
-            document_id, chat_state.chat_history
-        )
-        
-        # Update chat history
-        chat_state.chat_history.append({"role": "user", "content": user_input})
-        chat_state.chat_history.append({"role": "assistant", "content": response})
-        
-        return {"status": "success", "response": response}
-        
-    except Exception as e:
-        print(f"Error in send_message: {str(e)}")
-        return {
-            "status": "error", 
-            "message": f"Error processing message: {str(e)}"
-        }
-
-
-@app.post("/send_message_agent")
-async def send_message_agent(user_input: str = Form(...), namespace: str = Form(...)):
-    """
-    Process a user message using the OpenAI Agent and return a response.
-    
-    Args:
-        user_input: User's question or message
-        namespace: Namespace to search for relevant documents
-        
-    Returns:
-        Dict containing agent response or error information
-    """
-    try:
-        result = university_agent.process_message(user_input, namespace)
-        return result
-        
-    except Exception as e:
-        print(f"Error in send_message_agent: {str(e)}")
-        return {
-            "status": "error", 
-            "message": f"Error processing message with agent: {str(e)}"
-        }
 
 
 @app.post("/create_namespace")
@@ -609,18 +539,19 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
             await asyncio.sleep(0.1)
             
             # Get context and document information
-            context, database_overview, document_id, error = _get_relevant_context(user_input, namespace)
+            history = chat_state.chat_history
+            context, database_overview, document_id, error = _get_relevant_context(user_input, namespace, history)
             
             if error:
                 yield f"data: {json.dumps({'type': 'error', 'message': error})}\n\n"
-                return
+                return 
             
             # Stream the AI response in real-time
             accumulated_response = ""
             
             for chunk in message_bot_stream(
                 user_input, context, "", database_overview, 
-                document_id, chat_state.chat_history
+                document_id, history
             ):
                 accumulated_response += chunk
                 
@@ -649,97 +580,6 @@ async def send_message_stream(user_input: str = Form(...), namespace: str = Form
             "Access-Control-Allow-Headers": "*",
         }
     )
-
-
-@app.post("/send_message_agent_stream")
-async def send_message_agent_stream(user_input: str = Form(...), namespace: str = Form(...)):
-    """
-    Streaming version of send_message_agent with real-time AI response chunks.
-    
-    Uses the OpenAI Agent to send Server-Sent Events with incremental response 
-    chunks as the AI generates the response, providing real-time feedback.
-    
-    Args:
-        user_input: User's question or message  
-        namespace: Namespace to search for relevant documents
-        
-    Returns:
-        StreamingResponse with Server-Sent Events
-    """
-    async def generate_response():
-        try:
-            # Send initial processing event
-            yield f"data: {json.dumps({'type': 'chunk', 'content': ''})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Stream the AI response using the agent
-            async for chunk in university_agent.process_message_stream(user_input, namespace):
-                if chunk.get("type") == "error":
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    return
-                elif chunk.get("type") == "chunk":
-                    yield f"data: {json.dumps(chunk)}\n\n"
-                    await asyncio.sleep(STREAM_DELAY)
-                elif chunk.get("type") == "complete":
-                    yield f"data: {json.dumps(chunk)}\n\n"
-            
-        except Exception as e:
-            print(f"Error in send_message_agent_stream: {str(e)}")
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Error processing message: {str(e)}'})}\n\n"
-    
-    return StreamingResponse(
-        generate_response(),
-        media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
-
-
-@app.get("/agent_info")
-async def get_agent_info():
-    """
-    Get information about the OpenAI agent configuration and status.
-    
-    Returns:
-        Dict containing agent configuration and current status
-    """
-    try:
-        return {
-            "status": "success",
-            **university_agent.get_agent_info()
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error getting agent info: {str(e)}"
-        }
-
-
-@app.get("/agent_history")
-async def get_agent_history():
-    """
-    Get the current conversation history from the OpenAI assistant.
-    
-    Returns:
-        Dict containing the conversation history
-    """
-    try:
-        history = university_agent.get_conversation_history()
-        return {
-            "status": "success",
-            "conversation_history": history,
-            "history_length": len(history)
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error getting agent history: {str(e)}"
-        }
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
