@@ -124,6 +124,23 @@ class DocProcessor:
         text = ""
         for page in pdf_reader.pages:
             text += page.extract_text()
+        replacements = {
+            "<br>":"",
+            "<p>":"",
+            "</p>":"",
+            "|":"",
+            "•":"",
+            "_":"",
+            "..":"",
+            "...":"",
+            "\n":"",
+            "\r\n":"",
+            "*":"",
+        }
+
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+
         return text
     
     def _process_extracted_text(self, text: str, namespace: str, fileID: str, file_name: str) -> Dict[str, Any]:
