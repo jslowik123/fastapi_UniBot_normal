@@ -205,30 +205,6 @@ async def start_bot():
             "message": f"Error starting bot: {str(e)}"
         }
 
-
-@app.post("/start_agent")
-async def start_agent():
-    """
-    Initialize the OpenAI agent and reset conversation state.
-    
-    Returns:
-        Dict containing initialization status and agent info
-    """
-    try:
-        university_agent.reset_conversation()
-        agent_info = university_agent.get_agent_info()
-        return {
-            "status": "success", 
-            "message": "OpenAI Assistant started successfully",
-            "agent_info": agent_info
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error starting agent: {str(e)}"
-        }
-
-
 def _get_relevant_context(user_input: str, namespace: str, history: list) -> tuple:
     """
     Get relevant context for a user query from document database.

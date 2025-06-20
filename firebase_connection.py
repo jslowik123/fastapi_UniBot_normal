@@ -5,7 +5,12 @@ from typing import Dict, Any, List
 import json
 import os
 import re
-
+from dotenv import load_dotenv
+# Debug print
+print("Environment variables:")
+print(f"FIREBASE_DATABASE_URL: {os.getenv('FIREBASE_DATABASE_URL')}")
+print(f"FIREBASE_CREDENTIALS_PATH: {os.getenv('FIREBASE_CREDENTIALS_PATH')}")
+print(f"Current working directory: {os.getcwd()}")
 
 class FirebaseConnection:
     """
@@ -27,6 +32,7 @@ class FirebaseConnection:
         Raises:
             ValueError: If FIREBASE_DATABASE_URL is not set
         """
+        load_dotenv()
         database_url = os.getenv('FIREBASE_DATABASE_URL')
         if not database_url:
             raise ValueError("FIREBASE_DATABASE_URL environment variable must be set")
@@ -58,17 +64,7 @@ class FirebaseConnection:
                 print(f"Error decoding JSON credentials: {str(e)}")
                 # Fallback to file credentials or no auth
                 self._fallback_initialization(database_url, credentials_path)
-        elif credentials_path and os.path.exists(credentials_path):
-            # Initialize from file
-            cred = credentials.Certificate(credentials_path)
-            firebase_admin.initialize_app(cred, {
-                'databaseURL': database_url
-            })
-        else:
-            # Fallback without credentials (public DB only)
-            firebase_admin.initialize_app(options={
-                'databaseURL': database_url
-            })
+    
 
     def _fallback_initialization(self, database_url: str, credentials_path: str = None):
         """

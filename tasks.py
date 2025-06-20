@@ -14,22 +14,6 @@ doc_processor = DocProcessor(
     openai_api_key=os.getenv("OPENAI_API_KEY")
 )
 
-
-@celery.task(name="tasks.process_file")
-def process_file(job_id: str):
-    """
-    Legacy test task for file processing simulation.
-    
-    Args:
-        job_id: Unique identifier for the job
-    """
-    r.set(f"job:{job_id}", "started")
-    time.sleep(2)  # Simulate work
-    r.set(f"job:{job_id}", "50%")
-    time.sleep(2)
-    r.set(f"job:{job_id}", "done")
-
-
 @celery.task(bind=True, name="tasks.process_document")
 def process_document(self, file_content: bytes, namespace: str, fileID: str, filename: str):
     """
