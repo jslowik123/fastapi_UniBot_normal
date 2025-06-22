@@ -87,7 +87,7 @@ ANTWORTFORMAT:
 {{
   "answer": "Deine ausführliche Antwort hier",
   "document_id": "{document_id}",
-  "source": "Originaltext aus dem Kontext, der die Antwort stützt"
+  "source": "Originaltext aus dem Kontext, der die Antwort stützt, korrekt formatiert."
 }}"""
 
     full_system_prompt = base_system_prompt + chat_history_emphasis + sources_section
@@ -165,7 +165,7 @@ def _format_chat_history(chat_history):
     return formatted_history
 
 
-def message_bot(user_input, context, knowledge, database_overview, document_id, chat_history):
+def message_bot(user_input, context, knowledge, document_id, chat_history):
     """
     Processes a user message and returns a response from the chatbot.
     
@@ -224,7 +224,7 @@ def message_bot(user_input, context, knowledge, database_overview, document_id, 
         return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
 
-def message_bot_stream(user_input, context, knowledge, database_overview, document_id, chat_history):
+def message_bot_stream(user_input, context, knowledge, document_id, chat_history):
     """
     Streaming version of message_bot that yields real-time response chunks.
     

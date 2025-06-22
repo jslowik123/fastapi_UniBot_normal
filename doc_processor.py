@@ -44,7 +44,7 @@ class DocProcessor:
             
         self._openai = OpenAI(api_key=openai_api_key)
         self._pinecone = Pinecone(api_key=pinecone_api_key)
-        self._con = PineconeCon("userfiles")
+        self._con = PineconeCon("pdfs-index")
         
         try:
             self._firebase = FirebaseConnection()
@@ -305,28 +305,31 @@ class DocProcessor:
     
     def get_namespace_data(self, namespace: str) -> List[Dict[str, Any]]:
         """
-        Retrieve document metadata for all documents in a namespace.
+        Retrieves and formats all document metadata for a given namespace.
         
         Args:
-            namespace: The namespace to query
+            namespace: Namespace to retrieve metadata from
             
         Returns:
-            List of dictionaries containing document metadata (id, name, keywords, summary, chunk_count)
+            A clean list of document metadata dictionaries.
         """
         if not self._firebase_available:
             print("Firebase not available for namespace data retrieval")
             return []
             
         try:
+            # Calls Firebase to get the raw namespace data
             namespace_data = self._firebase.get_namespace_data(namespace)
             
             extracted_data = []
+            # Check if the call was successful and data exists
             if namespace_data.get('status') == 'success' and 'data' in namespace_data:
+                # The data is a dictionary of documents, convert it to a list
                 for doc_id, doc_data in namespace_data['data'].items():
-                    # Skip non-document entries
-                    if not isinstance(doc_data, dict) or 'keywords' not in doc_data:
+                    if not isinstance(doc_data, dict):
                         continue
                     
+                    # Create a clean dictionary for each document
                     doc_info = {
                         'id': doc_id,
                         'name': doc_data.get('name', 'Unknown'),
@@ -338,12 +341,12 @@ class DocProcessor:
                     
             return extracted_data
         except Exception as e:
-            print(f"Error retrieving namespace data: {str(e)}")
+            print(f"Error processing namespace data: {str(e)}")
             return []
 
-    def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], user_query: str, history: list) -> Dict[str, Any]:
+    def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], user_query: str, history: list) -> Optional[Dict[str, Any]]:
         """
-        Find the most appropriate document to answer a user's query.
+        Find the most appropriate document for a user query using AI.
         
         Uses AI to analyze document metadata (keywords, summaries) and match
         them against the user's question to find the most relevant document.
@@ -354,10 +357,11 @@ class DocProcessor:
             user_query: User's question or search query
             
         Returns:
-            Dict containing the ID of the most appropriate document
+            Dict containing the ID of the best document and reasoning, or None
         """
         if not extracted_data:
-            return {"id": "default"}
+            print("Keine Dokumente im Namespace gefunden, Suche kann nicht durchgeführt werden.")
+            return None
             
         if len(extracted_data) == 1:
             return {"id": extracted_data[0]["id"]}
@@ -375,9 +379,11 @@ class DocProcessor:
                 Wenn du kein passendes Dokument findest, antworte mit {"id": "no_document_found"}."""
             }
                 
+            formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history]) if history else "Keine"
+            
             user_message = {
                 "role": "user",
-                "content": f"Hier sind die verfügbaren Dokumente:\n\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}\n\nDie Frage des Users lautet: {user_query}\n\nDie Chat History des Users lautet: {history}\n\nWelches Dokument ist am besten geeignet? \n\n"
+                "content": f"Hier sind die verfügbaren Dokumente:\n\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}\n\nDie Frage des Users lautet: {user_query}\n\nDie Chat History des Users lautet: {formatted_history}\n\nWelches Dokument ist am besten geeignet? \n\n"
             }
                 
             response = self._openai.chat.completions.create(

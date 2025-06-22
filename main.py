@@ -15,6 +15,7 @@ from redis import Redis
 import json
 import asyncio
 from celery.exceptions import Ignore
+import traceback
 
 # Load environment variables
 load_dotenv()
@@ -52,11 +53,8 @@ app.add_middleware(
 
 # Initialize connections
 pc = pinecone.Pinecone(api_key=pinecone_api_key)
-con = PineconeCon("userfiles")
+con = PineconeCon("pdfs-index")
 doc_processor = DocProcessor(pinecone_api_key, openai_api_key)
-
-# Initialize OpenAI Agent
-university_agent = UniversityAgent()
 
 
 class ChatState:
@@ -217,19 +215,24 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         Tuple containing (context_text, database_overview, document_id) or error info
     """
     # Get namespace overview
+    print("Fetching namespace data...")
     database_overview = doc_processor.get_namespace_data(namespace)
+    print(f"Namespace data: {database_overview}")
     # if not database_overview:
     #    return None, None, None, f"No documents found in namespace {namespace}"
         
     # Find appropriate document
+    print("Searching for appropriate document...")
     appropriate_document = doc_processor.appropriate_document_search(
         namespace=namespace, extracted_data=database_overview, user_query=user_input, history=history,
     )
+    print(f"Appropriate document found: {appropriate_document}")
     
     if not appropriate_document or "id" not in appropriate_document:
         return None, None, None, "Could not find appropriate document for query"
 
     # Query vector database
+    print(f"Querying Pinecone with fileID: {appropriate_document['id']}")
     results = con.query(
         query=user_input, 
         namespace=namespace, 
@@ -238,10 +241,12 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
     )
     
     # Extract context from results
+    print(f"Pinecone results: {results}")
     context_parts = []
-    for match in results.matches:
-        if hasattr(match, 'metadata') and 'text' in match.metadata:
-            context_parts.append(match.metadata['text'])
+    if results and results.matches:
+        for match in results.matches:
+            if hasattr(match, 'metadata') and 'text' in match.metadata:
+                context_parts.append(match.metadata['text'])
     
     if not context_parts:
         return None, None, None, "No relevant content found for query"
@@ -468,94 +473,68 @@ async def get_task_status(task_id: str):
         raise HTTPException(status_code=500, detail=error_detail)
 
 
-async def _stream_error_response(message: str):
+@app.post("/send_message")
+async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     """
-    Generate error response for streaming endpoints.
-    
-    Args:
-        message: Error message to send
-        
-    Yields:
-        Server-sent event formatted error message
-    """
-    yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
-
-
-@app.post("/send_message_stream")
-async def send_message_stream(user_input: str = Form(...), namespace: str = Form(...)):
-    """
-    Streaming version of send_message with real-time AI response chunks.
-    
-    Sends Server-Sent Events with incremental response chunks as the AI
-    generates the response, providing real-time feedback to the user.
+    Send a message to the bot and get a structured response.
     
     Args:
         user_input: User's question or message  
         namespace: Namespace to search for relevant documents
         
     Returns:
-        StreamingResponse with Server-Sent Events
+        JSON response with the bot's answer
     """
+    print("--- /send_message endpoint called ---")
+    print(f"Received input: user_input='{user_input}', namespace='{namespace}'")
+
     if not chat_state.chain:
-        return StreamingResponse(
-            _stream_error_response("Bot not started. Please call /start_bot first"),
-            media_type="text/plain",
-            headers={
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "*",
-            }
+        print("Bot not started. Raising HTTPException 400.")
+        raise HTTPException(
+            status_code=400,
+            detail="Bot not started. Please call /start_bot first."
         )
-    
-    async def generate_response():
-        try:
-            # Send initial processing event
-            yield f"data: {json.dumps({'type': 'chunk', 'content': ''})}\n\n"
-            await asyncio.sleep(0.1)
-            
-            # Get context and document information
-            history = chat_state.chat_history
-            context, database_overview, document_id, error = _get_relevant_context(user_input, namespace, history)
-            
-            if error:
-                yield f"data: {json.dumps({'type': 'error', 'message': error})}\n\n"
-                return 
-            
-            # Stream the AI response in real-time
-            accumulated_response = ""
-            
-            for chunk in message_bot_stream(
-                user_input, context, "", database_overview, 
-                document_id, history
-            ):
-                accumulated_response += chunk
-                
-                # Send chunk event with only the new chunk content
-                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
-                await asyncio.sleep(STREAM_DELAY)  # Prevent overwhelming the client
-            
-            # Update chat history after streaming is complete
-            chat_state.chat_history.append({"role": "user", "content": user_input})
-            chat_state.chat_history.append({"role": "assistant", "content": accumulated_response})
-            
-            # Send completion event
-            yield f"data: {json.dumps({'type': 'complete', 'fullResponse': accumulated_response})}\n\n"
-            
-        except Exception as e:
-            print(f"Error in send_message_stream: {str(e)}")
-            yield f"data: {json.dumps({'type': 'error', 'message': f'Error processing message: {str(e)}'})}\n\n"
-    
-    return StreamingResponse(
-        generate_response(),
-        media_type="text/plain",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "*",
+
+    try:
+        # Get context and document information
+        history = chat_state.chat_history
+        print(f"Current chat history length: {len(history)}")
+        
+        print("Getting relevant context...")
+        context, database_overview, document_id, error = _get_relevant_context(user_input, namespace, history)
+        print(f"Context: {context}")
+        print(f"Database overview: {database_overview}")
+        print(f"Context retrieved. document_id='{document_id}', error='{error}'")
+        print(f"Error: {error}")
+        print("Sending message to bot...")
+        # Get the AI response
+        response = message_bot(
+            user_input, context, "", 
+            document_id, history
+        )
+        print(f"Bot response received: {response}")
+        
+        # Update chat history
+        print("Updating chat history...")
+        chat_state.chat_history.append({"role": "user", "content": user_input})
+        chat_state.chat_history.append({"role": "assistant", "content": response})
+        print("Chat history updated.")
+        
+        final_response = {
+            "status": "success",
+            "response": response
         }
-    )
+        print(f"Sending final response: {final_response}")
+        return final_response
+        
+    except Exception as e:
+        print(f"Error in send_message: {str(e)}")
+        print(traceback.format_exc())
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing message: {str(e)}"
+        )
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))

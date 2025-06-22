@@ -60,10 +60,12 @@ class FirebaseConnection:
                 firebase_admin.initialize_app(cred, {
                     'databaseURL': database_url
                 })
-            except json.JSONDecodeError as e:
-                print(f"Error decoding JSON credentials: {str(e)}")
-                # Fallback to file credentials or no auth
+            except (json.JSONDecodeError, ValueError) as e:
+                print(f"Error with JSON credentials: {str(e)}. Falling back.")
                 self._fallback_initialization(database_url, credentials_path)
+        else:
+            # If no JSON credentials, proceed to fallback
+            self._fallback_initialization(database_url, credentials_path)
     
 
     def _fallback_initialization(self, database_url: str, credentials_path: str = None):
@@ -362,4 +364,32 @@ class FirebaseConnection:
                 'status': 'error',
                 'message': f'Error updating global namespace summary: {str(e)}'
             }
+
+    def get_all_metadata_from_namespace(self, namespace: str) -> List[Dict[str, Any]]:
+        """
+        Retrieves all document metadata for a given namespace from Firebase.
+        
+        Args:
+            namespace: Namespace to retrieve metadata from
+            
+        Returns:
+            List of dictionaries, where each dictionary is a document's metadata
+        """
+        try:
+            ref = self._db.reference(f"files/{namespace}")
+            data = ref.get()
+
+            if not data:
+                return []
+
+            metadata_list = []
+            for fileID, metadata in data.items():
+                metadata['id'] = fileID
+                metadata_list.append(metadata)
+
+            return metadata_list
+
+        except Exception as e:
+            print(f"Error retrieving all metadata from namespace '{namespace}': {str(e)}")
+            return []
 
