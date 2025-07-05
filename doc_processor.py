@@ -355,12 +355,12 @@ class DocProcessor:
             namespace: The namespace being searched
             extracted_data: List of document metadata dictionaries
             user_query: User's question or search query
+            history: Chat history for context
             
         Returns:
             Dict containing the ID of the best document and reasoning, or None
         """
         if not extracted_data:
-            print("Keine Dokumente im Namespace gefunden, Suche kann nicht durchgeführt werden.")
             return None
             
         if len(extracted_data) == 1:
@@ -394,11 +394,12 @@ class DocProcessor:
             )
                 
             response_content = response.choices[0].message.content
-            return json.loads(response_content)
+            
+            result = json.loads(response_content)
+            
+            return result
             
         except (json.JSONDecodeError, Exception) as e:
-            print(f"Error in document selection: {str(e)}")
-            print(f"Response content: {response_content if 'response_content' in locals() else 'No response'}")
             # Fallback: return first document
             return {"id": extracted_data[0]["id"]}
 

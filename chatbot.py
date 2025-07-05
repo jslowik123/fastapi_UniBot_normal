@@ -127,19 +127,44 @@ def _validate_inputs(user_input, context, knowledge, chat_history):
     Returns:
         tuple: Validated and sanitized inputs
     """
+    # BULLETPROOF: Sanitize user input - never throw errors
     if not user_input or not isinstance(user_input, str):
-        raise ValueError("User input must be a non-empty string")
+        user_input = "Bitte stellen Sie eine Frage"
+    user_input = user_input.strip() if user_input.strip() else "Bitte stellen Sie eine Frage"
     
+    # BULLETPROOF: Validate and clean chat history
     if not isinstance(chat_history, list):
         chat_history = []
+    
+    # Clean chat history - remove invalid entries
+    cleaned_history = []
+    for msg in chat_history:
+        if (isinstance(msg, dict) and 
+            "role" in msg and 
+            "content" in msg and 
+            isinstance(msg["role"], str) and 
+            isinstance(msg["content"], str) and 
+            msg["role"].strip() and 
+            msg["content"].strip()):
+            cleaned_history.append(msg)
+    
+    chat_history = cleaned_history
         
-    if not context or not isinstance(context, str):
+    # BULLETPROOF: Validate context - NEVER replace valid context
+    if context is None:
         context = ""
-
-    if not knowledge or not isinstance(knowledge, str):
+    elif not isinstance(context, str):
+        context = str(context) if context else ""
+    # DO NOT check if context is empty - preserve all valid string contexts
+    
+    # BULLETPROOF: Validate knowledge - NEVER replace valid knowledge
+    if knowledge is None:
         knowledge = ""
+    elif not isinstance(knowledge, str):
+        knowledge = str(knowledge) if knowledge else ""
+    # DO NOT check if knowledge is empty - preserve all valid string knowledge
         
-    return user_input.strip(), context, knowledge, chat_history
+    return user_input, context, knowledge, chat_history
 
 
 def _format_chat_history(chat_history):
@@ -152,15 +177,44 @@ def _format_chat_history(chat_history):
     Returns:
         list: Formatted chat history for LangChain
     """
+    
+    # BULLETPROOF: Validate input
+    if not isinstance(chat_history, list):
+        return []
+    
+    if not chat_history:
+        return []
+    
     formatted_history = []
-    for msg in chat_history:
-        if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
-            continue
+    for i, msg in enumerate(chat_history):
+        try:
+            # BULLETPROOF: Validate message structure
+            if not isinstance(msg, dict):
+                continue
+                
+            if "role" not in msg or "content" not in msg:
+                continue
             
-        if msg["role"] == "user":
-            formatted_history.append(HumanMessage(content=msg["content"]))
-        elif msg["role"] == "assistant":
-            formatted_history.append(AIMessage(content=msg["content"]))
+            role = msg["role"]
+            content = msg["content"]
+            
+            # BULLETPROOF: Validate role and content
+            if not isinstance(role, str) or not isinstance(content, str):
+                continue
+            
+            if not role.strip() or not content.strip():
+                continue
+            
+            # BULLETPROOF: Create appropriate message type
+            if role.strip().lower() == "user":
+                formatted_history.append(HumanMessage(content=content.strip()))
+            elif role.strip().lower() == "assistant":
+                formatted_history.append(AIMessage(content=content.strip()))
+            else:
+                continue
+                
+        except Exception as e:
+            continue
     
     return formatted_history
 
@@ -180,18 +234,32 @@ def message_bot(user_input, context, knowledge, document_id, chat_history):
         str: The chatbot's response
     """
     try:
+        # BULLETPROOF: Validate all inputs
         user_input, context, knowledge, chat_history = _validate_inputs(
             user_input, context, knowledge, chat_history
         )
         
-        formatted_history = _format_chat_history(chat_history)
+        # BULLETPROOF: Validate document_id
+        if document_id is None:
+            document_id = ""
+        elif not isinstance(document_id, str):
+            document_id = str(document_id)
         
-        # Create context-aware chain that emphasizes chat history when present
-        llm = _get_openai_client()
-        prompt_template = _create_context_aware_prompt(bool(chat_history))
-        chain = prompt_template | llm
+        # BULLETPROOF: Format chat history with validation
+        try:
+            formatted_history = _format_chat_history(chat_history)
+        except Exception as e:
+            formatted_history = []
         
-        # Debug: Zeige welche Parameter tatsächlich an den Chain weitergegeben werden
+        # BULLETPROOF: Create LLM and chain with error handling
+        try:
+            llm = _get_openai_client()
+            prompt_template = _create_context_aware_prompt(bool(chat_history))
+            chain = prompt_template | llm
+        except Exception as e:
+            return "Entschuldigung, es ist ein Fehler beim Erstellen des AI-Modells aufgetreten."
+        
+        # BULLETPROOF: Prepare chain parameters with validation
         chain_params = {
             "input": user_input,
             "context": context,
@@ -200,27 +268,100 @@ def message_bot(user_input, context, knowledge, document_id, chat_history):
             "chat_history": formatted_history,
         }
         
-        print("CHAIN PARAMETER:")
-        print(f"Input: {chain_params['input']}")
-        print(f"Context (erste 300 Zeichen): {chain_params['context'][:300] if chain_params['context'] else 'LEER'}...")
-        print(f"Knowledge (erste 200 Zeichen): {chain_params['knowledge'][:200] if chain_params['knowledge'] else 'LEER'}...")
-        print(f"Document ID: {chain_params['document_id']}")
-        print(f"Chat History Länge: {len(chain_params['chat_history'])}")
-        print("\n")
+        # BULLETPROOF: Validate all chain parameters
+        for key, value in chain_params.items():
+            if key == "chat_history":
+                if not isinstance(value, list):
+                    chain_params[key] = []
+            else:
+                if not isinstance(value, str):
+                    chain_params[key] = str(value) if value is not None else ""
         
-        response = chain.invoke(chain_params)
+        # STRUKTURIERTE AUSGABE - Nur die wichtigsten Informationen
+        print("\n" + "="*80)
+        print("CONTEXT:")
+        print("-" * 40)
+        print(context[:500] + "..." if len(context) > 500 else context)
         
-        if not response or not hasattr(response, 'content'):
-            return "Entschuldigung, ich konnte keine Antwort generieren."
+        print("\n" + "-" * 40)
+        print("SYSTEM PROMPT:")
+        print("-" * 40)
+        # Erstelle den finalen System Prompt
+        has_history = bool(chat_history)
+        base_prompt = "Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität."
+        
+        if has_history:
+            history_section = """
+
+🔄 CHAT HISTORY BEACHTUNG - WICHTIG:
+Du siehst eine Chat History mit vorherigen Nachrichten. BERÜCKSICHTIGE diese aktiv:
+- Beziehe dich auf vorherige Fragen und Antworten
+- Nutze den Kontext aus früheren Nachrichten
+- Wenn der Nutzer "dazu", "darüber", "das" oder ähnliche Bezugswörter verwendet, beziehe dich auf vorherige Themen
+- Beantworte Rückfragen oder Nachfragen basierend auf dem bisherigen Gesprächsverlauf
+- Vermeide Wiederholungen bereits gegebener Antworten, es sei denn, es wird explizit verlangt
+- Erkenne den Kontext der aktuellen Frage im Zusammenhang mit der Chat History"""
+        else:
+            history_section = """
+
+📝 NEUE UNTERHALTUNG:
+Dies ist der Beginn einer neuen Unterhaltung ohne vorherige Chat History."""
+
+        sources_section = f"""
+
+DEINE ANTWORTQUELLEN:
+Diese Informationen stehen dir zur Verfügung:
+
+HOCHSCHULSPEZIFISCHE INFORMATIONEN:
+{context}
+
+ZUSÄTZLICHES WISSEN:
+{knowledge}
+
+
+
+DOKUMENTEN-ID: {document_id}
+
+VERHALTEN:
+- Stütze deine Antworten auf die bereitgestellten Quellen
+- Antworte natürlich und direkt, als würdest du mit Studierenden sprechen
+- Bei Widersprüchen: Bevorzuge hochschulspezifische Informationen
+- Bei fehlenden Informationen: Sage es klar und biete Hilfe an
+- Gib ausführliche, aber präzise Antworten
+- Verwende innerhalb der "answer" kein "" sondern nur ''
+
+
+WICHTIGE REGEL - NIEMALS ÜBER KONTEXT SPRECHEN:
+- Sprich NIEMALS über "verfügbare Dokumente", "Kontext" oder "Informationen in den Dokumenten"
+- Sage NIEMALS "Basierend auf den verfügbaren Informationen..." oder ähnliches
+- Wenn du nicht genug Informationen hast, stelle stattdessen PRÄZISE RÜCKFRAGEN
+- Beispiel: Statt "Ich habe keine Informationen dazu" → "Auf welchen Studiengang bezieht sich deine Frage?"
+- Beispiel: Statt "In den Dokumenten steht..." → Antworte direkt mit der Information
+
+ANTWORTFORMAT:
+{{
+  "answer": "Deine ausführliche Antwort hier",
+  "document_id": "{document_id}",
+  "source": "Originaltext aus dem Kontext, der die Antwort stützt, korrekt formatiert."
+}}"""
+
+        full_system_prompt = base_prompt + history_section + sources_section
+        print(full_system_prompt[:800] + "..." if len(full_system_prompt) > 800 else full_system_prompt)
+        print("="*80 + "\n")
+        
+        # BULLETPROOF: Invoke chain with comprehensive error handling
+        try:
+            response = chain.invoke(chain_params)
+        except Exception as e:
+            return "Entschuldigung, es ist ein Fehler bei der AI-Verarbeitung aufgetreten."
+        
+        # BULLETPROOF: Validate response - always return something
+        if not response or not hasattr(response, 'content') or not response.content or not isinstance(response.content, str):
+            return "Entschuldigung, ich konnte keine gültige Antwort generieren."
             
-        print("AI RESPONSE:", response.content)
         return response.content
         
-    except ValueError as ve:
-        print(f"Validation error in message_bot: {str(ve)}")
-        return "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
     except Exception as e:
-        print(f"Error in message_bot: {str(e)}")
         return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
 
@@ -268,7 +409,6 @@ def message_bot_stream(user_input, context, knowledge, document_id, chat_history
     except ValueError:
         yield "Entschuldigung, ich konnte Ihre Nachricht nicht verstehen."
     except Exception as e:
-        print(f"Error in message_bot_stream: {str(e)}")
         yield "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
 

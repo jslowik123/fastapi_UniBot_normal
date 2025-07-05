@@ -84,8 +84,9 @@ class PineconeCon:
         Raises:
             Exception: If embedding generation or query fails
         """
+        # BULLETPROOF: Sanitize query - never throw error for empty string
         if not query or not query.strip():
-            raise ValueError("Query cannot be empty")
+            query = "Bitte stellen Sie eine Frage"
             
         try:
             # Generate embedding for the query
@@ -106,8 +107,8 @@ class PineconeCon:
                 include_metadata=True,
                 filter=query_filter
             )
+            
             return results
             
         except Exception as e:
-            print(f"Error in vector query: {str(e)}")
             raise
