@@ -256,10 +256,26 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         if not document_id or not isinstance(document_id, str):
             document_id = ""
 
+        # Generate optimized query for vector search
+        optimized_query = user_input  # Default fallback
+        try:
+            if document_id and document_id != "no_document_found":
+                # Find the selected document's metadata
+                selected_document = next((doc for doc in database_overview if doc.get("id") == document_id), None)
+                if selected_document:
+                    optimized_query = doc_processor.generate_search_query(
+                        user_input=user_input,
+                        document_metadata=selected_document,
+                        history=history
+                    )
+        except Exception as e:
+            # If query generation fails, use original user_input
+            optimized_query = user_input
+
         # Query vector database
         try:
             results = con.query(
-                query=user_input, 
+                query=optimized_query, 
                 namespace=namespace, 
                 fileID=document_id, 
                 num_results=DEFAULT_NUM_RESULTS,
@@ -269,7 +285,8 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
             print("\n" + "="*80)
             print("VEKTOR QUERY ERGEBNISSE:")
             print("-" * 40)
-            print(f"Query: '{user_input}'")
+            print(f"Original Query: '{user_input}'")
+            print(f"Optimized Query: '{optimized_query}'")
             print(f"Namespace: {namespace}")
             print(f"Document ID: {document_id}")
             print(f"Gefundene Matches: {len(results.matches) if results.matches else 0}")

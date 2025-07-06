@@ -344,6 +344,71 @@ class DocProcessor:
             print(f"Error processing namespace data: {str(e)}")
             return []
 
+    def generate_search_query(self, user_input: str, document_metadata: Dict[str, Any], history: list) -> str:
+        """
+        Generate an optimized search query for vector database retrieval.
+        
+        Analyzes user input and document context to create a better query
+        for finding relevant document chunks.
+        
+        Args:
+            user_input: User's original question
+            document_metadata: Metadata of the selected document
+            history: Chat history for context
+            
+        Returns:
+            Optimized query string for vector search
+        """
+        try:
+            prompt = {
+                "role": "system",
+                "content": """Du bist ein Experte für Informationssuche. Deine Aufgabe ist es, basierend auf einer Nutzerfrage und dem Kontext eines Dokuments, eine optimierte Suchanfrage zu erstellen, die die relevantesten Textabschnitte in einer Vektordatenbank findet.
+
+Analysiere die Nutzerfrage und erstelle eine bessere Suchanfrage, die:
+- Die Kernkonzepte und wichtigsten Begriffe der Frage enthält
+- Synonyme und verwandte Begriffe berücksichtigt
+- Spezifische Fachbegriffe aus dem Dokumentkontext nutzt
+- Unnötige Füllwörter entfernt
+- Präzise und fokussiert ist
+
+Antworte nur mit der optimierten Suchanfrage, ohne Erklärungen oder zusätzliche Formatierung."""
+            }
+            
+            formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history[-3:]]) if history else "Keine"
+            
+            user_message = {
+                "role": "user", 
+                "content": f"""Nutzerfrage: {user_input}
+
+Dokumentkontext:
+- Keywords: {document_metadata.get('keywords', 'Keine')}
+- Zusammenfassung: {document_metadata.get('summary', 'Keine')}
+- Zusätzliche Infos: {document_metadata.get('additional_info', 'Keine')}
+
+Letzte Chat-Nachrichten: {formatted_history}
+
+Erstelle eine optimierte Suchanfrage:"""
+            }
+            
+            response = self._openai.chat.completions.create(
+                model=DEFAULT_MODEL,
+                messages=[prompt, user_message],
+                temperature=0.1,
+                max_tokens=100
+            )
+            
+            optimized_query = response.choices[0].message.content.strip()
+            
+            # Fallback to original query if generation fails or returns empty
+            if not optimized_query or len(optimized_query) < 3:
+                return user_input
+                
+            return optimized_query
+            
+        except Exception as e:
+            # Return original query if generation fails
+            return user_input
+
     def appropriate_document_search(self, namespace: str, extracted_data: List[Dict[str, Any]], user_query: str, history: list) -> Optional[Dict[str, Any]]:
         """
         Find the most appropriate document for a user query using AI.
