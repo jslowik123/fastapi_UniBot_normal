@@ -281,7 +281,7 @@ def message_bot(user_input, context, knowledge, document_id, chat_history):
         print("\n" + "="*80)
         print("CONTEXT:")
         print("-" * 40)
-        print(context[:500] + "..." if len(context) > 500 else context)
+        print(context)  # Vollständiger Context ohne Kürzung
         
         print("\n" + "-" * 40)
         print("SYSTEM PROMPT:")

@@ -272,9 +272,9 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
             # If query generation fails, use original user_input
             optimized_query = user_input
 
-        # Query vector database
+        # Query vector database with adjacent chunks
         try:
-            results = con.query(
+            results = con.query_with_adjacent_chunks(
                 query=optimized_query, 
                 namespace=namespace, 
                 fileID=document_id, 
@@ -307,7 +307,7 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         # BULLETPROOF: Extract context from results with comprehensive validation
         context_parts = []
         if results and hasattr(results, 'matches') and results.matches:
-            for match in results.matches:
+            for i, match in enumerate(results.matches):
                 # Multiple layers of validation
                 if (hasattr(match, 'metadata') and 
                     match.metadata and 
@@ -317,11 +317,44 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
                     isinstance(match.metadata['text'], str) and 
                     match.metadata['text'].strip()):
                     
-                    context_parts.append(match.metadata['text'].strip())
+                    # Sammle alle Chunks für dieses Match (previous + current + next)
+                    match_chunks = []
+                    
+                    # Previous chunk hinzufügen
+                    if ('adjacent_chunks' in match.metadata and 
+                        match.metadata['adjacent_chunks'] and 
+                        match.metadata['adjacent_chunks'].get('previous') and
+                        hasattr(match.metadata['adjacent_chunks']['previous'], 'metadata') and
+                        match.metadata['adjacent_chunks']['previous'].metadata and
+                        'text' in match.metadata['adjacent_chunks']['previous'].metadata):
+                        
+                        prev_text = match.metadata['adjacent_chunks']['previous'].metadata['text'].strip()
+                        if prev_text:
+                            match_chunks.append(f"--- CHUNK {i+1}a (VORHERIGER) START ---\n{prev_text}\n--- CHUNK {i+1}a (VORHERIGER) END ---")
+                    
+                    # Current chunk hinzufügen
+                    chunk_text = match.metadata['text'].strip()
+                    match_chunks.append(f"--- CHUNK {i+1}b (HAUPTTREFFER) START ---\n{chunk_text}\n--- CHUNK {i+1}b (HAUPTTREFFER) END ---")
+                    
+                    # Next chunk hinzufügen
+                    if ('adjacent_chunks' in match.metadata and 
+                        match.metadata['adjacent_chunks'] and 
+                        match.metadata['adjacent_chunks'].get('next') and
+                        hasattr(match.metadata['adjacent_chunks']['next'], 'metadata') and
+                        match.metadata['adjacent_chunks']['next'].metadata and
+                        'text' in match.metadata['adjacent_chunks']['next'].metadata):
+                        
+                        next_text = match.metadata['adjacent_chunks']['next'].metadata['text'].strip()
+                        if next_text:
+                            match_chunks.append(f"--- CHUNK {i+1}c (NÄCHSTER) START ---\n{next_text}\n--- CHUNK {i+1}c (NÄCHSTER) END ---")
+                    
+                    # Alle Chunks für dieses Match zusammenfügen
+                    if match_chunks:
+                        context_parts.append("\n".join(match_chunks))
         
         # BULLETPROOF: Always return valid context, even if empty
         try:
-            context = "\n".join(context_parts) if context_parts else ""
+            context = "\n\n".join(context_parts) if context_parts else ""
             return context, database_overview, document_id, None
             
         except Exception as e:
