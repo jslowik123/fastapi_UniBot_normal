@@ -393,3 +393,35 @@ class FirebaseConnection:
             print(f"Error retrieving all metadata from namespace '{namespace}': {str(e)}")
             return []
 
+    def store_modules(self, namespace: str, fileID: str, modules_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Store structured module data for a document in Firebase.
+        
+        Args:
+            namespace: Namespace where the document is stored
+            fileID: Document identifier
+            modules_data: List of module dictionaries extracted from the document
+            
+        Returns:
+            Dict containing operation status
+        """
+        try:
+            # Database path for the modules
+            ref = self._db.reference(f'files/{namespace}/{fileID}/modules')
+            
+            # Store the modules data
+            ref.set(modules_data)
+            
+            return {
+                'status': 'success',
+                'message': f'Modules for {fileID} successfully stored',
+                'path': f'files/{namespace}/{fileID}/modules',
+                'module_count': len(modules_data)
+            }
+            
+        except Exception as e:
+            return {
+                'status': 'error',
+                'message': f'Error storing modules: {str(e)}'
+            }
+

@@ -10,8 +10,8 @@ from pinecone_connection import PineconeCon
 from firebase_connection import FirebaseConnection
 
 # Constants
-DEFAULT_CHUNK_SIZE = 1000
-DEFAULT_MODEL = "gpt-4.1-nano"
+DEFAULT_CHUNK_SIZE = 1500
+DEFAULT_MODEL = "gpt-4.1-mini"
 DEFAULT_TEMPERATURE = 0.3
 EMBEDDING_MODEL = "text-embedding-3-small"
 
@@ -450,6 +450,20 @@ Erstelle eine optimierte Suchanfrage:"""
                 "role": "user",
                 "content": f"Hier sind die verfügbaren Dokumente:\n\n{json.dumps(extracted_data, indent=2, ensure_ascii=False)}\n\nDie Frage des Users lautet: {user_query}\n\nDie Chat History des Users lautet: {formatted_history}\n\nWelches Dokument ist am besten geeignet? \n\n"
             }
+            
+            # STRUKTURIERTE AUSGABE - Document Selection Debugging
+            print("\n" + "="*80)
+            print("DOCUMENT SELECTION DEBUGGING:")
+            print("-" * 40)
+            print(f"User Query: '{user_query}'")
+            print(f"Namespace: {namespace}")
+            print(f"Anzahl verfügbare Dokumente: {len(extracted_data)}")
+            print("Dokumente Details:")
+            for doc in extracted_data:
+                print(f"  - ID: {doc.get('id')}")
+                print(f"    Keywords: {doc.get('keywords')}")
+                print(f"    Summary Preview: {str(doc.get('summary'))[:100]}...")
+            print(f"Chat History: {formatted_history}")
                 
             response = self._openai.chat.completions.create(
                 model=DEFAULT_MODEL,
@@ -459,8 +473,11 @@ Erstelle eine optimierte Suchanfrage:"""
             )
                 
             response_content = response.choices[0].message.content
+            print(f"OpenAI Response: {response_content}")
             
             result = json.loads(response_content)
+            print(f"Parsed Result: {result}")
+            print("="*80 + "\n")
             
             return result
             
@@ -543,4 +560,5 @@ Erstelle eine optimierte Suchanfrage:"""
                 "message": f"Error generating global summary: {str(e)}"
             }
         
+   
     

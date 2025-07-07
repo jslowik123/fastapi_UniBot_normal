@@ -15,12 +15,13 @@ doc_processor = DocProcessor(
 )
 
 @celery.task(bind=True, name="tasks.process_document")
-def process_document(self, file_content: bytes, namespace: str, fileID: str, filename: str):
+def process_document(self, file_content: bytes, namespace: str, fileID: str, filename: str, structured_modules: bool = False):
     """
     Process a document asynchronously using Celery.
     
     Handles PDF parsing, text extraction, embedding generation, and storage
-    in both Pinecone and Firebase with progress tracking.
+    in both Pinecone and Firebase with progress tracking. Optionally extracts
+    structured module data.
     
     Args:
         self: Celery task instance (bound task)
@@ -28,6 +29,7 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
         namespace: Pinecone namespace for organization
         fileID: Unique document identifier
         filename: Original filename
+        structured_modules: Whether to extract structured module data
         
     Returns:
         Dict containing processing results and status
@@ -78,6 +80,48 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
         pdf_file = io.BytesIO(file_content)
         result = doc_processor.process_pdf_bytes(pdf_file, namespace, fileID, filename)
         
+        # If structured modules are requested, extract them
+        modules_result = None
+        if structured_modules and result['status'] == 'success':
+            # Update status: Extracting modules
+            if doc_processor._firebase_available:
+                doc_processor._firebase.update_document_status(namespace, fileID, {
+                    'progress': 60,
+                    'status': 'Extracting structured modules'
+                })
+            
+            self.update_state(
+                state='PROCESSING',
+                meta={
+                    'status': 'Extracting structured modules',
+                    'current': 60,
+                    'total': 100,
+                    'file': filename
+                }
+            )
+            
+            try:
+                # Extract text from PDF for module parsing
+                pdf_file.seek(0)  # Reset file pointer
+                pdf_reader = PdfReader(pdf_file)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text()
+                
+                # Extract modules using OpenAI
+                modules_data = doc_processor.parse_modules_with_openai(text)
+                
+                # Store modules in Firebase
+                if doc_processor._firebase_available and modules_data:
+                    modules_result = doc_processor._firebase.store_modules(namespace, fileID, modules_data)
+                    
+            except Exception as e:
+                print(f"Warning: Module extraction failed: {str(e)}")
+                modules_result = {
+                    'status': 'error',
+                    'message': f'Module extraction failed: {str(e)}'
+                }
+        
         # Update status: Finalizing processing
         if doc_processor._firebase_available:
             doc_processor._firebase.update_document_status(namespace, fileID, {
@@ -113,6 +157,8 @@ def process_document(self, file_content: bytes, namespace: str, fileID: str, fil
                 'chunks': result.get('chunks', 0),
                 'pinecone_result': result.get('pinecone_result', {}),
                 'firebase_result': result.get('firebase_result', {}),
+                'modules_result': modules_result,
+                'structured_modules_processed': structured_modules,
                 'file': filename,
                 'current': 100,
                 'total': 100

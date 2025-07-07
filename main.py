@@ -23,7 +23,7 @@ load_dotenv()
 # Constants
 API_VERSION = "1.0.0"
 DEFAULT_DIMENSION = 1536
-DEFAULT_NUM_RESULTS = 5
+DEFAULT_NUM_RESULTS = 7
 STREAM_DELAY = 0.01
 
 # Initialize environment variables
@@ -93,95 +93,6 @@ async def root():
     }
 
 
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...), namespace: str = Form(...), fileID: str = Form(...), additionalInfo: str = Form(...)):
-    """
-    Upload and process a PDF document asynchronously.
-    
-    Args:
-        file: PDF file to upload and process
-        namespace: Namespace for organizing documents  
-        fileID: Unique identifier for the document
-        
-    Returns:
-        Dict containing upload status and task information
-    """
-    try:
-        if not file.filename.lower().endswith('.pdf'):
-            return {
-                "status": "error",
-                "message": "Only PDF files are supported",
-                "filename": file.filename
-                
-            }
-            
-        content = await file.read()
-        task = process_document.delay(content, namespace, fileID, file.filename)
-        
-        return {
-            "status": "success",
-            "message": "File upload started",
-            "task_id": task.id,
-            "filename": file.filename
-        }
-    except Exception as e:
-        return {
-            "status": "error", 
-            "message": f"Error processing file: {str(e)}", 
-            "filename": file.filename
-        }
-
-
-@app.post("/delete")
-async def delete_file(file_name: str = Form(...), namespace: str = Form(...), 
-                     fileID: str = Form(...), just_firebase: str = Form(...)):
-    """
-    Delete a document from Pinecone and/or Firebase.
-    
-    Args:
-        file_name: Name of the file to delete
-        namespace: Namespace containing the document
-        fileID: Document identifier
-        just_firebase: If "true", delete only from Pinecone, otherwise delete from both
-        
-    Returns:
-        Dict containing deletion status from both services
-    """
-    try:
-        firebase = FirebaseConnection()
-        
-        if just_firebase.lower() == "true":
-            # Delete only Pinecone embeddings
-            pinecone_result = con.delete_embeddings(file_name, namespace)
-            firebase_result = firebase.delete_document_metadata(namespace, fileID)
-            
-            return {
-                "status": "success", 
-                "message": f"File {file_name} deleted successfully",
-                "pinecone_status": pinecone_result.get("status", "unknown"),
-                "firebase_status": firebase_result["status"],
-                "firebase_message": firebase_result["message"]
-            }
-        else:
-            # Delete from both services
-            firebase_result = firebase.delete_document_metadata(namespace, fileID)
-            pinecone_result = con.delete_embeddings(file_name, namespace)
-
-            return {
-                "status": "success", 
-                "message": f"File {file_name} deleted successfully",
-                "pinecone_status": pinecone_result.get("status", "unknown"),
-                "pinecone_message": pinecone_result.get("message", ""),
-                "firebase_status": firebase_result["status"],
-                "firebase_message": firebase_result["message"]
-            }
-    except Exception as e:
-        return {
-            "status": "error", 
-            "message": f"Error deleting file: {str(e)}"
-        }
-
-
 @app.post("/start_bot")
 async def start_bot():
     """
@@ -245,7 +156,30 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
             appropriate_document = doc_processor.appropriate_document_search(
                 namespace=namespace, extracted_data=database_overview, user_query=user_input, history=history,
             )
+            
+            # STRUKTURIERTE AUSGABE - Document Selection
+            print("\n" + "="*80)
+            print("DOCUMENT SELECTION ERGEBNISSE:")
+            print("-" * 40)
+            print(f"User Query: '{user_input}'")
+            print(f"Namespace: {namespace}")
+            print(f"Verfügbare Dokumente ({len(database_overview)}):")
+            for i, doc in enumerate(database_overview):
+                print(f"  {i+1}. ID: {doc.get('id', 'N/A')}")
+                print(f"     Name: {doc.get('name', 'N/A')}")
+                print(f"     Keywords: {doc.get('keywords', [])}")
+                print(f"     Summary: {doc.get('summary', 'N/A')[:100]}{'...' if len(str(doc.get('summary', ''))) > 100 else ''}")
+                print(f"     Additional Info: {doc.get('additional_info', 'N/A')}")
+                print()
+            
+            if appropriate_document:
+                print(f"AUSGEWÄHLTES DOKUMENT: {appropriate_document}")
+            else:
+                print("KEIN DOKUMENT AUSGEWÄHLT (appropriate_document ist None)")
+            print("="*80 + "\n")
+            
         except Exception as e:
+            print(f"\nERROR in document selection: {str(e)}")
             return "", database_overview, "", None  # Return empty but valid values instead of error
         
         # BULLETPROOF: Validate document selection result
@@ -272,37 +206,48 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
             # If query generation fails, use original user_input
             optimized_query = user_input
 
-        # Query vector database with adjacent chunks
-        try:
-            results = con.query_with_adjacent_chunks(
-                query=optimized_query, 
-                namespace=namespace, 
-                fileID=document_id, 
-                num_results=DEFAULT_NUM_RESULTS,
-            )
-            
-            # STRUKTURIERTE AUSGABE - Vektor Query Ergebnisse
+        # Query vector database with adjacent chunks - ONLY if we have a valid document ID
+        results = None
+        if document_id and document_id != "no_document_found":
+            try:
+                results = con.query_with_adjacent_chunks(
+                    query=optimized_query, 
+                    namespace=namespace, 
+                    fileID=document_id, 
+                    num_results=DEFAULT_NUM_RESULTS,
+                )
+                
+                # STRUKTURIERTE AUSGABE - Vektor Query Ergebnisse
+                print("\n" + "="*80)
+                print("VEKTOR QUERY ERGEBNISSE:")
+                print("-" * 40)
+                print(f"Original Query: '{user_input}'")
+                print(f"Optimized Query: '{optimized_query}'")
+                print(f"Namespace: {namespace}")
+                print(f"Document ID: {document_id}")
+                print(f"Gefundene Matches: {len(results.matches) if results.matches else 0}")
+                
+                if results.matches:
+                    for i, match in enumerate(results.matches):
+                        print(f"\nMatch {i+1}:")
+                        print(f"  Score: {match.score:.4f}")
+                        print(f"  ID: {match.id}")
+                        if hasattr(match, 'metadata') and match.metadata and 'text' in match.metadata:
+                            text_preview = match.metadata['text'][:150] + "..." if len(match.metadata['text']) > 150 else match.metadata['text']
+                            print(f"  Text: {text_preview}")
+                print("="*80 + "\n")
+                
+            except Exception as e:
+                print(f"ERROR in Pinecone query: {str(e)}")
+                results = None  # Set to None if query fails
+        else:
             print("\n" + "="*80)
-            print("VEKTOR QUERY ERGEBNISSE:")
+            print("KEINE VEKTOR QUERY - KEIN DOKUMENT AUSGEWÄHLT")
             print("-" * 40)
-            print(f"Original Query: '{user_input}'")
-            print(f"Optimized Query: '{optimized_query}'")
-            print(f"Namespace: {namespace}")
             print(f"Document ID: {document_id}")
-            print(f"Gefundene Matches: {len(results.matches) if results.matches else 0}")
-            
-            if results.matches:
-                for i, match in enumerate(results.matches):
-                    print(f"\nMatch {i+1}:")
-                    print(f"  Score: {match.score:.4f}")
-                    print(f"  ID: {match.id}")
-                    if hasattr(match, 'metadata') and match.metadata and 'text' in match.metadata:
-                        text_preview = match.metadata['text'][:150] + "..." if len(match.metadata['text']) > 150 else match.metadata['text']
-                        print(f"  Text: {text_preview}")
+            print("Grund: Kein passendes Dokument gefunden oder no_document_found")
+            print("Fortsetzung ohne spezifischen Context...")
             print("="*80 + "\n")
-            
-        except Exception as e:
-            return "", database_overview, document_id, None  # Return empty but valid values instead of error
         
         # BULLETPROOF: Extract context from results with comprehensive validation
         context_parts = []
@@ -364,224 +309,6 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         return "", [], "", None  # Return empty but valid values instead of error
 
 
-
-@app.post("/create_namespace")
-async def create_namespace(namespace: str = Form(...), dimension: int = Form(DEFAULT_DIMENSION)):
-    """
-    Create a new namespace in the Pinecone index.
-    
-    Args:
-        namespace: Name of the namespace to create
-        dimension: Vector dimension (default: 1536 for OpenAI embeddings)
-        
-    Returns:
-        Dict containing creation status
-    """
-    try:
-        pc = PineconeCon("userfiles")
-        result = pc.create_namespace_with_dummy(namespace, dimension)
-        return result
-        
-    except Exception as e:
-        return {
-            "status": "error", 
-            "message": f"Error creating namespace: {str(e)}"
-        }
-
-
-@app.post("/delete_namespace")
-async def delete_namespace(namespace: str = Form(...)):
-    """
-    Delete a namespace from Pinecone index and Firebase metadata.
-    
-    Args:
-        namespace: Name of the namespace to delete
-        
-    Returns:
-        Dict containing deletion status from both services
-    """
-    try:
-        pc = PineconeCon("userfiles")
-        pinecone_result = pc.delete_namespace(namespace)
-        
-        firebase = FirebaseConnection()
-        firebase_result = firebase.delete_namespace_metadata(namespace)
-        
-        return {
-            "status": "success", 
-            "message": f"Namespace {namespace} deleted successfully",
-            "pinecone_status": pinecone_result.get("status", "unknown"),
-            "pinecone_message": pinecone_result.get("message", ""),
-            "firebase_status": firebase_result["status"],
-            "firebase_message": firebase_result["message"]
-        }
-    except Exception as e:
-        return {
-            "status": "error", 
-            "message": f"Error deleting namespace: {str(e)}"
-        }
-
-
-@app.get("/test_worker")
-async def test_worker():
-    """
-    Test the Celery worker connectivity.
-    
-    Returns:
-        Dict containing test task information
-    """
-    try:
-        result = test_task.delay()
-        return {
-            "status": "success", 
-            "task_id": result.id, 
-            "message": "Test task sent to worker"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "message": f"Error testing worker: {str(e)}"
-        }
-
-
-def _handle_task_state(task) -> dict:
-    """
-    Handle different Celery task states and format response accordingly.
-    
-    Args:
-        task: Celery AsyncResult object
-        
-    Returns:
-        Dict containing formatted task status information
-    """
-    if task.state == 'PENDING':
-        return {
-            'state': task.state,
-            'status': 'PENDING',
-            'message': 'Task is waiting for execution',
-            'progress': 0
-        }
-    elif task.state in ['STARTED', 'PROCESSING']:
-        meta = task.info if isinstance(task.info, dict) else {}
-        return {
-            'state': task.state,
-            'status': 'PROCESSING',
-            'message': meta.get('status', 'Processing'),
-            'current': meta.get('current', 0),
-            'total': meta.get('total', 100),
-            'progress': meta.get('current', 0),
-            'file': meta.get('file', '')
-        }
-    elif task.state in ['FAILURE', 'REVOKED']:
-        # Handle failure states
-        if isinstance(task.info, Exception):
-            error_info = {
-                'type': type(task.info).__name__,
-                'message': str(task.info),
-                'details': 'Task failed with an exception'
-            }
-        else:
-            meta = task.info if isinstance(task.info, dict) else {}
-            error_info = {
-                'type': meta.get('exc_type', type(task.result).__name__ if task.result else 'Unknown'),
-                'message': meta.get('exc_message', str(task.result) if task.result else 'Unknown error'),
-                'details': meta.get('error', 'No additional details available')
-            }
-        
-        raise HTTPException(
-            status_code=500,
-            detail={
-                'state': task.state,
-                'status': 'FAILURE',
-                'message': 'Task processing failed',
-                'error': error_info,
-                'progress': 0
-            }
-        )
-    elif task.state == 'SUCCESS':
-        result = task.result if isinstance(task.result, dict) else {}
-        
-        if not result:
-            return {
-                'state': task.state,
-                'status': 'SUCCESS',
-                'message': 'Task completed but no result available',
-                'progress': 100,
-                'result': {
-                    'message': 'No result data available',
-                    'chunks': 0,
-                    'pinecone_status': 'unknown',
-                    'firebase_status': 'unknown',
-                    'file': ''
-                }
-            }
-        else:
-            return {
-                'state': task.state,
-                'status': 'SUCCESS',
-                'message': 'Completed successfully',
-                'progress': 100,
-                'result': {
-                    'message': result.get('message', 'Task completed'),
-                    'chunks': result.get('chunks', 0),
-                    'pinecone_status': result.get('pinecone_result', {}).get('status', 'unknown'),
-                    'firebase_status': result.get('firebase_result', {}).get('status', 'unknown'),
-                    'file': result.get('file', '')
-                }
-            }
-    else:
-        return {
-            'state': task.state,
-            'status': 'UNKNOWN',
-            'message': f'Unknown state: {task.state}',
-            'info': str(task.info) if task.info else 'No info available',
-            'progress': 0
-        }
-
-
-@app.get("/task_status/{task_id}")
-async def get_task_status(task_id: str):
-    """
-    Get the status of an asynchronous task.
-    
-    Args:
-        task_id: Unique identifier of the task to check
-        
-    Returns:
-        Dict containing task status, progress, and results
-        
-    Raises:
-        HTTPException: If task failed or status check encountered an error
-    """
-    try:
-        task = celery.AsyncResult(task_id)
-        print(f"Task state: {task.state}")
-        print(f"Task info: {task.info}")
-        print(f"Task result: {task.result}")
-        
-        response = _handle_task_state(task)
-        print(f"Sending response: {response}")
-        return response
-        
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
-    except Exception as e:
-        print(f"Error in task status: {str(e)}")
-        error_detail = {
-            'state': 'ERROR',
-            'status': 'ERROR',
-            'message': 'Error checking task status',
-            'error': {
-                'type': type(e).__name__,
-                'message': str(e),
-                'details': 'Error occurred while checking task status'
-            },
-            'progress': 0
-        }
-        raise HTTPException(status_code=500, detail=error_detail)
-
-
 @app.post("/send_message")
 async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
     """
@@ -632,7 +359,8 @@ async def send_message(user_input: str = Form(...), namespace: str = Form(...)):
             context, 
             "", 
             document_id, 
-            history
+            database_overview,
+            history,
         )
         
         # BULLETPROOF: Validate response

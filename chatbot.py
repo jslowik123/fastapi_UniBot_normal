@@ -67,10 +67,12 @@ Dies ist der Beginn einer neuen Unterhaltung ohne vorherige Chat History."""
 DEINE ANTWORTQUELLEN:
 Diese Informationen stehen dir zur Verfügung:
 
-HOCHSCHULSPEZIFISCHE INFORMATIONEN:
+DATABASE OVERVIEW (Hier sind alle Dokumente die du theoretisch zu Verfügung hast, damit kannst du User z.B. hinweisen über welche Themen du schreiben kannst und welche nicht.):
+{database_overview}
+
+HOCHSCHULSPEZIFISCHE INFORMATIONEN (Hier sind einzelnche Chunks extrahiert aus denen im DatabaseOverview enthaltenen Dokumenten):
 {context}
 
-ZUSÄTZLICHES WISSEN:
 {knowledge}
 
 DOKUMENTEN-ID: {document_id}
@@ -114,7 +116,7 @@ def get_bot():
     return prompt_template | llm
 
 
-def _validate_inputs(user_input, context, knowledge, chat_history):
+def _validate_inputs(user_input, context, knowledge, database_overview, chat_history):
     """
     Validates and sanitizes input parameters for message processing.
     
@@ -122,6 +124,7 @@ def _validate_inputs(user_input, context, knowledge, chat_history):
         user_input: User's message
         context: Document context
         knowledge: General knowledge context
+        database_overview: Overview of available documents
         chat_history: Previous conversation history
         
     Returns:
@@ -163,8 +166,14 @@ def _validate_inputs(user_input, context, knowledge, chat_history):
     elif not isinstance(knowledge, str):
         knowledge = str(knowledge) if knowledge else ""
     # DO NOT check if knowledge is empty - preserve all valid string knowledge
+    
+    # BULLETPROOF: Validate database_overview
+    if database_overview is None:
+        database_overview = []
+    elif not isinstance(database_overview, list):
+        database_overview = []
         
-    return user_input, context, knowledge, chat_history
+    return user_input, context, knowledge, database_overview, chat_history
 
 
 def _format_chat_history(chat_history):
@@ -219,7 +228,7 @@ def _format_chat_history(chat_history):
     return formatted_history
 
 
-def message_bot(user_input, context, knowledge, document_id, chat_history):
+def message_bot(user_input, context, knowledge, document_id, database_overview, chat_history):
     """
     Processes a user message and returns a response from the chatbot.
     
@@ -235,8 +244,8 @@ def message_bot(user_input, context, knowledge, document_id, chat_history):
     """
     try:
         # BULLETPROOF: Validate all inputs
-        user_input, context, knowledge, chat_history = _validate_inputs(
-            user_input, context, knowledge, chat_history
+        user_input, context, knowledge, database_overview, chat_history = _validate_inputs(
+            user_input, context, knowledge, database_overview, chat_history
         )
         
         # BULLETPROOF: Validate document_id
@@ -265,12 +274,13 @@ def message_bot(user_input, context, knowledge, document_id, chat_history):
             "context": context,
             "knowledge": knowledge,
             "document_id": document_id,
+            "database_overview": database_overview,
             "chat_history": formatted_history,
         }
         
         # BULLETPROOF: Validate all chain parameters
         for key, value in chain_params.items():
-            if key == "chat_history":
+            if key == "chat_history" or key == "database_overview":
                 if not isinstance(value, list):
                     chain_params[key] = []
             else:
@@ -328,6 +338,7 @@ VERHALTEN:
 - Bei Widersprüchen: Bevorzuge hochschulspezifische Informationen
 - Bei fehlenden Informationen: Sage es klar und biete Hilfe an
 - Gib ausführliche, aber präzise Antworten
+- Achtung: Das was im Context steht ist nicht zwingend richtig und relevant, achte darauf dass der context zu der Frage passt.
 - Verwende innerhalb der "answer" kein "" sondern nur ''
 
 
@@ -365,7 +376,7 @@ ANTWORTFORMAT:
         return "Entschuldigung, es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut."
 
 
-def message_bot_stream(user_input, context, knowledge, document_id, chat_history):
+def message_bot_stream(user_input, context, knowledge, document_id, database_overview, chat_history):
     """
     Streaming version of message_bot that yields real-time response chunks.
     
@@ -374,14 +385,15 @@ def message_bot_stream(user_input, context, knowledge, document_id, chat_history
         context: Relevant document context from vector search  
         knowledge: General knowledge context
         document_id: ID of the document being referenced
+        database_overview: Overview of available documents
         chat_history: Previous conversation history
         
     Yields:
         str: Response chunks from the language model
     """
     try:
-        user_input, context, knowledge, chat_history = _validate_inputs(
-            user_input, context, knowledge, chat_history
+        user_input, context, knowledge, database_overview, chat_history = _validate_inputs(
+            user_input, context, knowledge, database_overview, chat_history
         )
         
         formatted_history = _format_chat_history(chat_history)
@@ -398,6 +410,7 @@ def message_bot_stream(user_input, context, knowledge, document_id, chat_history
             "context": context,
             "knowledge": knowledge,
             "document_id": document_id,
+            "database_overview": database_overview,
             "chat_history": formatted_history,
         }
         
