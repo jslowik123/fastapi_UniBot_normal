@@ -10,3 +10,4 @@ openai==1.76.0
 firebase-admin==6.8.0
 celery
 redis
+PyMuPDF==1.23.3

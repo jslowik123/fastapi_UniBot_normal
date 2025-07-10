@@ -1,16 +1,13 @@
 import firebase_admin
 from firebase_admin import credentials
 from firebase_admin import db
+from firebase_admin import storage
 from typing import Dict, Any, List
 import json
 import os
 import re
 from dotenv import load_dotenv
-# Debug print
-print("Environment variables:")
-print(f"FIREBASE_DATABASE_URL: {os.getenv('FIREBASE_DATABASE_URL')}")
-print(f"FIREBASE_CREDENTIALS_PATH: {os.getenv('FIREBASE_CREDENTIALS_PATH')}")
-print(f"Current working directory: {os.getcwd()}")
+
 
 class FirebaseConnection:
     """
@@ -26,6 +23,7 @@ class FirebaseConnection:
         
         Environment variables used:
         - FIREBASE_DATABASE_URL: URL of Firebase Realtime Database (required)
+        - FIREBASE_STORAGE_BUCKET: Name of Firebase Storage bucket (optional)
         - FIREBASE_CREDENTIALS_PATH: Path to credentials file (optional)
         - FIREBASE_CREDENTIALS_JSON: JSON string with credentials (optional, for Heroku)
         
@@ -41,6 +39,18 @@ class FirebaseConnection:
             self._initialize_firebase_app(database_url)
         
         self._db = db
+        
+        # Initialize Firebase Storage
+        storage_bucket = os.getenv('FIREBASE_STORAGE_BUCKET')
+        if storage_bucket:
+            self._bucket = storage.bucket(storage_bucket)
+        else:
+            # Try to get default bucket (project_id.appspot.com)
+            try:
+                self._bucket = storage.bucket()
+            except Exception as e:
+                pass
+                self._bucket = None
 
     def _initialize_firebase_app(self, database_url: str):
         """
@@ -61,7 +71,7 @@ class FirebaseConnection:
                     'databaseURL': database_url
                 })
             except (json.JSONDecodeError, ValueError) as e:
-                print(f"Error with JSON credentials: {str(e)}. Falling back.")
+                pass
                 self._fallback_initialization(database_url, credentials_path)
         else:
             # If no JSON credentials, proceed to fallback
@@ -390,38 +400,42 @@ class FirebaseConnection:
             return metadata_list
 
         except Exception as e:
-            print(f"Error retrieving all metadata from namespace '{namespace}': {str(e)}")
+            pass
             return []
 
-    def store_modules(self, namespace: str, fileID: str, modules_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    
+    def download_pdf_from_storage(self, namespace: str, document_name: str) -> bytes:
         """
-        Store structured module data for a document in Firebase.
+        Downloads a PDF file from Firebase Storage.
         
         Args:
-            namespace: Namespace where the document is stored
-            fileID: Document identifier
-            modules_data: List of module dictionaries extracted from the document
+            namespace: Namespace containing the document
+            document_id: Document identifier
             
         Returns:
-            Dict containing operation status
+            bytes: PDF file content as bytes
+            
+        Raises:
+            Exception: If download fails or file doesn't exist
         """
         try:
-            # Database path for the modules
-            ref = self._db.reference(f'files/{namespace}/{fileID}/modules')
+            # Check if Firebase Storage is available
+            if self._bucket is None:
+                raise RuntimeError("Firebase Storage bucket not initialized. Please set FIREBASE_STORAGE_BUCKET environment variable.")
             
-            # Store the modules data
-            ref.set(modules_data)
+            # Get a reference to the file in Firebase Storage
+            blob = self._bucket.blob(f"files/{namespace}/{document_name}")
             
-            return {
-                'status': 'success',
-                'message': f'Modules for {fileID} successfully stored',
-                'path': f'files/{namespace}/{fileID}/modules',
-                'module_count': len(modules_data)
-            }
+            # Check if file exists
+            if not blob.exists():
+                raise FileNotFoundError(f"PDF file not found at path: files/{namespace}/{document_name}")
+            
+            # Download the file content as bytes
+            pdf_bytes = blob.download_as_bytes()
+            
+           
+            return pdf_bytes
             
         except Exception as e:
-            return {
-                'status': 'error',
-                'message': f'Error storing modules: {str(e)}'
-            }
-
+            pass
+            raise

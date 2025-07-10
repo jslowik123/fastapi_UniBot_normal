@@ -50,11 +50,12 @@ class PineconeCon:
         retries = 0
         while retries < MAX_RETRIES:
             try:
+           
                 index_status = self._pc.describe_index(index_name)
                 if index_status.status['ready']:
                     break
             except Exception as e:
-                print(f"Error checking index status: {e}")
+                pass
             
             retries += 1
             time.sleep(RETRY_DELAY)
@@ -99,14 +100,7 @@ class PineconeCon:
             # Filter to search only within the specified document
             query_filter = {"pdf_id": fileID}
 
-            print(f"PINECONE QUERY DETAILS:")
-            print(f"  Query: '{query}'")
-            print(f"  Namespace: '{namespace}'")
-            print(f"  Filter: {query_filter}")
-            print(f"  Top K: {num_results}")
-            print(f"  Embedding model: {EMBEDDING_MODEL}")
-            print(f"  Embedding length: {len(embedding)}")
-
+        
             results = self._index.query(
                 namespace=namespace,
                 vector=embedding,
@@ -116,13 +110,10 @@ class PineconeCon:
                 filter=query_filter
             )
             
-            print(f"  Raw Pinecone Results: {results}")
-            print(f"  Matches found: {len(results.matches) if hasattr(results, 'matches') and results.matches else 0}")
-            
+           
             return results
             
         except Exception as e:
-            print(f"ERROR in Pinecone query: {str(e)}")
             raise
 
     def get_adjacent_chunks(self, chunk_id: str, namespace: str, fileID: str) -> Dict[str, Any]:
@@ -195,33 +186,17 @@ class PineconeCon:
             query = "Bitte stellen Sie eine Frage"
             
         try:
-            print("\n" + "="*80)
-            print("PINECONE QUERY WITH ADJACENT CHUNKS DEBUGGING:")
-            print("-" * 40)
-            print(f"Query: '{query}'")
-            print(f"Namespace: '{namespace}'")
-            print(f"FileID: '{fileID}'")
-            print(f"Num Results: {num_results}")
+        
             
             # Get regular query results first
             results = self.query(query, namespace, fileID, num_results)
-            
-            print(f"Initial Query Results: {results}")
-            if hasattr(results, 'matches'):
-                print(f"Number of matches: {len(results.matches) if results.matches else 0}")
-                if results.matches:
-                    for i, match in enumerate(results.matches):
-                        print(f"  Match {i+1}: ID={match.id}, Score={match.score:.4f}")
-            else:
-                print("No matches attribute found in results")
+
             
             # For each match, try to get adjacent chunks
             if results and hasattr(results, 'matches') and results.matches:
                 for match in results.matches:
                     if hasattr(match, 'id') and match.id:
-                        print(f"Getting adjacent chunks for: {match.id}")
                         adjacent = self.get_adjacent_chunks(match.id, namespace, fileID)
-                        print(f"Adjacent chunks result: {adjacent}")
                         # Add adjacent chunks to match metadata
                         if not hasattr(match, 'metadata'):
                             match.metadata = {}
@@ -229,10 +204,7 @@ class PineconeCon:
                             match.metadata = {}
                         match.metadata['adjacent_chunks'] = adjacent
             
-            print("="*80 + "\n")
             return results
             
         except Exception as e:
-            print(f"ERROR in query_with_adjacent_chunks: {str(e)}")
-            print("="*80 + "\n")
             raise

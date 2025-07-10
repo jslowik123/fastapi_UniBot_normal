@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Install dependencies
-pip install -r requirements.txt
+# pip install -r requirements.txt
 
 # Run the web server
 echo "Starting web server on http://localhost:9000"
