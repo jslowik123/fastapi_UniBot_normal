@@ -236,7 +236,7 @@ def _generate_optimized_query(user_input: str, selected_document_id: str,
 
 def _extract_chunks_from_match(match, doc_index: int, match_index: int) -> list:
     """
-    Extract all chunks (previous, current, next) from a single match.
+    Extract all chunks (previous, current, next) from a single match with page numbers.
     
     Args:
         match: Pinecone match object
@@ -244,9 +244,19 @@ def _extract_chunks_from_match(match, doc_index: int, match_index: int) -> list:
         match_index: Match index for labeling
         
     Returns:
-        List of formatted chunk strings
+        List of formatted chunk strings with page numbers
     """
     match_chunks = []
+    
+    def get_page_number(metadata):
+        """Extract page number from metadata"""
+        if 'pages' in metadata:
+            return metadata['pages']
+        elif 'page' in metadata:
+            return metadata['page']
+        elif 'page_number' in metadata:
+            return metadata['page_number']
+        return "?"
     
     # Previous chunk
     if ('adjacent_chunks' in match.metadata and 
@@ -257,12 +267,14 @@ def _extract_chunks_from_match(match, doc_index: int, match_index: int) -> list:
         'text' in match.metadata['adjacent_chunks']['previous'].metadata):
         
         prev_text = match.metadata['adjacent_chunks']['previous'].metadata['text'].strip()
+        prev_page = get_page_number(match.metadata['adjacent_chunks']['previous'].metadata)
         if prev_text:
-            match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}a (VORHERIGER) START ---\n{prev_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}a (VORHERIGER) END ---")
+            match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}a (VORHERIGER) SEITE {prev_page} START ---\n{prev_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}a (VORHERIGER) SEITE {prev_page} END ---")
     
     # Current chunk
     chunk_text = match.metadata['text'].strip()
-    match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}b (HAUPTTREFFER) START ---\n{chunk_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}b (HAUPTTREFFER) END ---")
+    current_page = get_page_number(match.metadata)
+    match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}b (HAUPTTREFFER) SEITE {current_page} START ---\n{chunk_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}b (HAUPTTREFFER) SEITE {current_page} END ---")
     
     # Next chunk
     if ('adjacent_chunks' in match.metadata and 
@@ -273,16 +285,18 @@ def _extract_chunks_from_match(match, doc_index: int, match_index: int) -> list:
         'text' in match.metadata['adjacent_chunks']['next'].metadata):
         
         next_text = match.metadata['adjacent_chunks']['next'].metadata['text'].strip()
+        next_page = get_page_number(match.metadata['adjacent_chunks']['next'].metadata)
         if next_text:
-            match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}c (NÄCHSTER) START ---\n{next_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}c (NÄCHSTER) END ---")
+            match_chunks.append(f"--- DOK{doc_index+1} CHUNK {match_index+1}c (NÄCHSTER) SEITE {next_page} START ---\n{next_text}\n--- DOK{doc_index+1} CHUNK {match_index+1}c (NÄCHSTER) SEITE {next_page} END ---")
     
     return match_chunks
+
 
 
 def _query_document(document_id: str, optimized_query: str, 
                    namespace: str, database_overview: list) -> str:
     """
-    Query a document and extract context.
+    Query a document and extract context with embedded page numbers.
     
     Args:
         document_id: Document ID to query
@@ -291,7 +305,7 @@ def _query_document(document_id: str, optimized_query: str,
         database_overview: Database overview with metadata
         
     Returns:
-        Formatted context string
+        Formatted context string with embedded page numbers
     """
     try:
         # Query vector database

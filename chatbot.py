@@ -178,11 +178,17 @@ VERHALTEN:
 - Gib ausführliche, aber präzise Antworten
 - Verwende innerhalb der "answer" kein "" sondern nur ''
 
+WICHTIG ZU SEITENZAHLEN:
+- Jeder Textabschnitt in den HOCHSCHULSPEZIFISCHEN INFORMATIONEN ist mit seiner Seitenzahl markiert (z.B. "SEITE 5")
+- Du MUSST die Seitenzahlen der Textabschnitte identifizieren, die du für deine Antwort verwendet hast
+- Gib nur die Seitenzahlen der Textabschnitte an, die du tatsächlich zitiert hast
+
 ANTWORTFORMAT:
 {{
   "answer": "Deine ausführliche Antwort hier",
   "document_id": "{document_id}",
-  "source": "Hier übernimmst du 1zu1 die Sätze aus den Quellen die du verwendet hast. Das ist die Zitierung der Quellen.",
+  "source": "Kopiere hier EXAKT und WÖRTLICH die spezifischen Sätze oder Textpassagen aus den HOCHSCHULSPEZIFISCHEN INFORMATIONEN, die du für deine Antwort verwendet hast. Gib nur die tatsächlichen Originalsätze wieder - keine Zusammenfassungen, keine Paraphrasierungen, keine eigenen Formulierungen. Wenn du mehrere Sätze verwendet hast, trenne sie mit ' | '. Beispiel: 'Die Anmeldung erfolgt über das Studentenportal. | Die Prüfung findet im Sommersemester statt.'",
+  "pages": [hier die Seitenzahlen als Liste von Zahlen der Textabschnitte, die du für deine Antwort verwendet hast, z.B. [5, 12, 15]]
   }}"""
 
         # Create messages array
