@@ -98,9 +98,9 @@ class PineconeCon:
             embedding = response.data[0].embedding
 
             # Filter to search only within the specified document
-            query_filter = {"pdf_id": fileID}
+            query_filter = {"document_id": fileID}
 
-        
+            
             results = self._index.query(
                 namespace=namespace,
                 vector=embedding,
@@ -110,7 +110,7 @@ class PineconeCon:
                 filter=query_filter
             )
             
-           
+            print(f"results3: {results}")
             return results
             
         except Exception as e:
@@ -190,7 +190,7 @@ class PineconeCon:
             
             # Get regular query results first
             results = self.query(query, namespace, fileID, num_results)
-
+            print(f"results2: {results}")
             
             # For each match, try to get adjacent chunks
             if results and hasattr(results, 'matches') and results.matches:

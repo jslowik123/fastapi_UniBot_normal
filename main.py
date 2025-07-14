@@ -17,7 +17,7 @@ load_dotenv()
 # Constants
 API_VERSION = "1.0.0"
 DEFAULT_DIMENSION = 1536
-DEFAULT_NUM_RESULTS = 5
+DEFAULT_NUM_RESULTS = 10
 STREAM_DELAY = 0.01
 
 # Initialize environment variables
@@ -315,7 +315,7 @@ def _query_document(document_id: str, optimized_query: str,
             fileID=document_id,
             num_results=DEFAULT_NUM_RESULTS,
         )
-        
+        print(f"results: {results}")
         # Extract context from results
         document_context_parts = []
         

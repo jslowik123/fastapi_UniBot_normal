@@ -133,6 +133,7 @@ def message_bot(user_input, context, document_id, database_overview, chat_histor
     Returns:
         str: The chatbot's response
     """
+    print(f"context: {context}")
     try:
         # Validate all inputs
         user_input, context, database_overview, chat_history = _validate_inputs(
@@ -153,13 +154,6 @@ def message_bot(user_input, context, document_id, database_overview, chat_histor
             openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         except Exception as e:
             return "Entschuldigung, es ist ein Fehler beim Erstellen des AI-Clients aufgetreten."
-
-        # Print the full context being sent to LLM
-        print("=" * 100)
-        print("CONTEXT BEING SENT TO LLM:")
-        print("=" * 100)
-        print(context)
-        print("=" * 100)
 
         # Create system message with context
         system_content = f"""Du bist ein sachlicher, präziser und hilfreicher Assistenz-Chatbot für eine Universität.
