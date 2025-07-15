@@ -17,7 +17,7 @@ load_dotenv()
 # Constants
 API_VERSION = "1.0.0"
 DEFAULT_DIMENSION = 1536
-DEFAULT_NUM_RESULTS = 10
+DEFAULT_NUM_RESULTS = 15
 STREAM_DELAY = 0.01
 
 # Initialize environment variables
@@ -363,34 +363,26 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         If failed: ("", [], "", error_message)
     """
     try:
-        print(f"[CONTEXT-DEBUG] Starting context retrieval for: '{user_input}' in namespace: '{namespace}'")
-        
         # Step 1: Sanitize inputs
         user_input, namespace, history = _sanitize_inputs(user_input, namespace, history)
-        print(f"[CONTEXT-DEBUG] After sanitization - user_input: '{user_input}', namespace: '{namespace}'")
         
         # Step 2: Get database overview
         database_overview, overview_error = _get_database_overview(namespace)
         if overview_error:
-            print(f"[CONTEXT-DEBUG] Database overview error - returning empty context")
             return "", [], "", None
-        print(f"[CONTEXT-DEBUG] Database overview found: {len(database_overview)} documents")
         
         # Step 3: Select appropriate document
         selected_document_id, selected_document_name, selection_error = _select_appropriate_document(
             namespace, database_overview, user_input, history
         )
-        print(f"[CONTEXT-DEBUG] Document selection - ID: '{selected_document_id}', Name: '{selected_document_name}', Error: {selection_error}")
         
         if selection_error or not selected_document_id:
-            print(f"[CONTEXT-DEBUG] No document selected - returning empty context")
             return "", database_overview, "", None
         
         # Step 4: Generate optimized query for the document
         optimized_query = _generate_optimized_query(
             user_input, selected_document_id, database_overview, history
         )
-        print(f"[CONTEXT-DEBUG] Optimized query: '{optimized_query}'")
         
         # Step 5: Query the document
         context = _query_document(
@@ -399,7 +391,6 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         return context, database_overview, selected_document_id, None
         
     except Exception as e:
-        print(f"[CONTEXT-DEBUG] Exception in context retrieval: {e}")
         return "", [], "", None
 
 

@@ -115,14 +115,16 @@ class DocProcessor:
                 "role": "system",
                 "content": """Du bist ein Experte für Informationssuche. Deine Aufgabe ist es, basierend auf einer Nutzerfrage und dem Kontext eines Dokuments, eine optimierte Suchanfrage zu erstellen, die die relevantesten Textabschnitte in einer Vektordatenbank findet.
 
-Analysiere die Nutzerfrage und erstelle eine bessere Suchanfrage, die:
-- Die Kernkonzepte und wichtigsten Begriffe der Frage enthält
-- Synonyme und verwandte Begriffe berücksichtigt
-- Spezifische Fachbegriffe aus dem Dokumentkontext nutzt
-- Unnötige Füllwörter entfernt
-- Präzise und fokussiert ist
-
-Antworte nur mit der optimierten Suchanfrage, ohne Erklärungen oder zusätzliche Formatierung."""
+                    Wichtig:
+                    - Ich möchte dass du nur 1-2 Stichwörter aus der Frage extrahierst und diese in die Suchanfrage einsetzt.
+                    - Wichtig Zahlen etc. übernehmen
+                    z.B. Frage: "Was ist das Modul Programmierung 1?"
+                    Antwort: "Programmierung 1"
+                    z.B. Frage: "Wie lange dauert der PO-Wechsel?"
+                    Antwort: "PO-Wechsel Dauer"
+                    z.B. Frage: "Wer ist der Modulverantwortliche für Analysis"
+                    Antwort: "Analysis"
+                    """
             }
             
             formatted_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history[-3:]]) if history else "Keine"
