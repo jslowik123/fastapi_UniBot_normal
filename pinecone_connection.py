@@ -110,7 +110,6 @@ class PineconeCon:
                 filter=query_filter
             )
             
-            print(f"results3: {results}")
             return results
             
         except Exception as e:
@@ -190,7 +189,6 @@ class PineconeCon:
             
             # Get regular query results first
             results = self.query(query, namespace, fileID, num_results)
-            print(f"results2: {results}")
             
             # For each match, try to get adjacent chunks
             if results and hasattr(results, 'matches') and results.matches:

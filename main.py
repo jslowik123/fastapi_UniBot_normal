@@ -396,9 +396,6 @@ def _get_relevant_context(user_input: str, namespace: str, history: list) -> tup
         context = _query_document(
             selected_document_id, optimized_query, namespace, database_overview
         )
-        print(f"[CONTEXT-DEBUG] Query result - Context length: {len(context)}")
-        
-        print(f"[CONTEXT-DEBUG] Final result - Context length: {len(context)}")
         return context, database_overview, selected_document_id, None
         
     except Exception as e:
