@@ -1,9 +1,12 @@
-### Server für den normalen ChatModus
+### Server für den normalen Chat-Modus
 
 Der Server läuft auf Port `9000`.
 Siehe `.env.example` für benötigte Umgebungsvariablen.
 
 ```bash
+# Virtuelle Umgebung erstellen
+python3 -m venv venv
+
 # Virtuelle Umgebung aktivieren
 source venv/bin/activate
 
