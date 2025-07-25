@@ -1,7 +1,6 @@
 ### Server für den normalen Chat-Modus
 
 Der Server läuft auf Port `9000`.
-Siehe `.env.example` für benötigte Umgebungsvariablen.
 
 ```bash
 # Virtuelle Umgebung erstellen
